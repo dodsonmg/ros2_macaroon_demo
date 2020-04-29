@@ -25,37 +25,14 @@ find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(macaroons REQUIRED)
 
-find_library(MACAROONS_LIB macaroons)
-find_path(MACAROONS_INCLUDE_DIR macaroons.hpp)
-
-include_directories(include ${MACAROONS_INCLUDE_DIR})
-
-add_library(comms_nodes SHARED
-            src/talker_node.cpp
-            src/listener_node.cpp)
-# target_compile_definitions(comms_nodes
-#   PRIVATE "MINIMAL_COMPOSITION_DLL")
-ament_target_dependencies(comms_nodes rclcpp rclcpp_components std_msgs)
-
-# This package installs libraries without exporting them.
-# Export the library path to ensure that the installed libraries are available.
-# if(NOT WIN32)
-#   ament_environment_hooks(
-#     "${ament_cmake_package_templates_ENVIRONMENT_HOOK_LIBRARY_PATH}"
-#     )
-# endif()
-
-add_executable(macaroon_demo src/macaroon_demo.cpp)
-target_link_libraries(macaroon_demo comms_nodes ${MACAROONS_LIB})
-# target_include_directories(macaroon_test PUBLIC ${MACAROONS_INCLUDE_DIR})
-ament_target_dependencies(macaroon_demo rclcpp class_loader)
-#target_include_directories(macaroon_test PRIVATE include)
-
-install(TARGETS
-  comms_nodes
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
+add_executable(macaroon_demo
+              src/macaroon_demo.cpp
+              src/talker_node.cpp
+              src/listener_node.cpp)
+target_include_directories(macaroon_demo PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(macaroon_demo rclcpp rclcpp_components std_msgs macaroons)
 
 install(TARGETS
   macaroon_demo

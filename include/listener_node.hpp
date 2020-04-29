@@ -8,7 +8,7 @@
 // #include "macaroon_test/visibility.h"
 
 /* macaroons */
-#include "macaroons.hpp"
+#include "macaroons/macaroons.hpp"
 
 // Create a Listener class that subclasses the generic rclcpp::Node base class.
 // The main function below will instantiate the class as a ROS node.

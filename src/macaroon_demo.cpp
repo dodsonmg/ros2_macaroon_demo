@@ -12,7 +12,7 @@
 #include "std_msgs/msg/string.hpp"
 
 /* macaroons */
-#include "macaroons.hpp"
+#include "macaroons/macaroons.hpp"
 
 using namespace std::chrono_literals;
 
