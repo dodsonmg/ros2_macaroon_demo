@@ -24,7 +24,6 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(libmacaroons REQUIRED)
-find_package(libcheri_type REQUIRED)
 
 add_executable(macaroon_demo
               src/macaroon_demo.cpp
@@ -33,7 +32,7 @@ add_executable(macaroon_demo
 target_include_directories(macaroon_demo PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(macaroon_demo rclcpp rclcpp_components std_msgs libmacaroons libcheri_type)
+ament_target_dependencies(macaroon_demo rclcpp rclcpp_components std_msgs libmacaroons)
 
 install(TARGETS
   macaroon_demo
