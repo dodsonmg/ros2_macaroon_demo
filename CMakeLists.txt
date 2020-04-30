@@ -28,7 +28,10 @@ find_package(libmacaroons REQUIRED)
 add_executable(macaroon_demo
               src/macaroon_demo.cpp
               src/talker_node.cpp
-              src/listener_node.cpp)
+              src/listener_node.cpp
+              src/resource_base.cpp
+              src/resource_owner.cpp
+              src/resource_user.cpp)
 target_include_directories(macaroon_demo PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)

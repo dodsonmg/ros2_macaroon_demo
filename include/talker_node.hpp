@@ -11,13 +11,14 @@ class TalkerNode : public rclcpp::Node
 {
 public:
   TalkerNode(const std::string & node_name, const std::string & topic_name);
-  void put_message(const std::string & msg);
+  void publish_message(std::string msg);
+  // void put_message(const std::string & msg);
 
 private:
-  size_t count_ = 1;
-  std::unique_ptr<std_msgs::msg::String> msg_;
+  // size_t count_ = 1;
+  // std::unique_ptr<std_msgs::msg::String> msg_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_;
-  rclcpp::TimerBase::SharedPtr timer_;
+  // rclcpp::TimerBase::SharedPtr timer_;
 };
 
 #endif // TALKER_NODE_HPP_
