@@ -13,28 +13,32 @@ void
 ResourceBase::run(void)
 {
     publish_macaroon();
-    exec_.spin_node_some(L_);
+    exec_.spin_node_some(L_);  // allow the ListenerNode callback to execute
     receive_macaroon();
 }
 
+// Add a first party caveat to the "owned" Macaroon by calling the Base class
 void
-ResourceBase::add_first_party_caveats_macaroon(const std::vector<std::string> first_party_caveats)
+ResourceBase::add_first_party_caveat(const std::string first_party_caveat)
 {
-    if(M_send_.initialised() && first_party_caveats.size() > 0)
-    {
-        for (size_t i = 0; i < first_party_caveats.size(); i++)
-        {
-            M_send_.add_first_party_caveat(first_party_caveats[i]);
-        }
-    }    
+    first_party_caveats_.push_back(first_party_caveat);
 }
 
+// Adds first party caveats and publishes a serialised Macaroon
 void
 ResourceBase::publish_macaroon(void)
 {
-    if(M_send_.initialised())
+    if(M_.initialised())
     {
-        (*T_).publish_message(M_send_.serialise());
+        // Derive a new Macaroon from M_ and add caveats
+        Macaroon M_send = M_;
+        for(std::string caveat : first_party_caveats_)
+        {
+            M_send.add_first_party_caveat(caveat);
+        }
+
+        // publish the serialised Macaroon with caveats
+        (*T_).publish_message(M_send.serialise());
     }
 }
 
@@ -45,6 +49,10 @@ ResourceBase::receive_macaroon(void)
     if (msg_received.size() > 0)
     {
         M_received_.deserialise(msg_received);
-        M_received_fresh_ = true;
+
+        if(M_received_.initialised())
+        {
+            M_received_fresh_ = true;
+        }
     }
 }

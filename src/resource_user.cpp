@@ -10,17 +10,21 @@ void
 ResourceUser::run(void)
 {
     ResourceBase::run();
+
     // If a Macaroon has been received and deserialised
-    // Assign it to the send Macaroon to be serialised and published
+    // Assign it to the Resource's Macaroon
     if(ResourceBase::M_received_.initialised() && ResourceBase::M_received_fresh_)
     {
-        ResourceBase::M_send_ = ResourceBase::M_received_;
+        ResourceBase::M_ = ResourceBase::M_received_;
+
+        ResourceBase::M_received_fresh_ = false;
     }
 }
 
-// This is only necessary if the user is also an intermediate node
+// Add a first party caveat to the Resource's Macaroon by calling the Base class
+// This is only exercised if the user is also an intermediate node
 void
-ResourceUser::add_first_party_caveats_macaroon(const std::vector<std::string> first_party_caveats)
+ResourceUser::add_first_party_caveat(const std::string first_party_caveat)
 {
-    ResourceBase::add_first_party_caveats_macaroon(first_party_caveats);
+    ResourceBase::add_first_party_caveat(first_party_caveat);
 }

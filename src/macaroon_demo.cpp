@@ -40,43 +40,47 @@ int main(int argc, char * argv[])
     // Establish the topics for delegating a macaroon and receiving one for verification.
     // A -> <issuer_topic> -> B -> <attenuator_topic> -> C -> <user_topic> -> A
     auto issuer_topic = std::string("issue_macaroon");
-    auto attenuator_topic = std::string("attenuate_macaroon");
+    auto intermediary_topic = std::string("attenuate_macaroon");
     auto user_topic = std::string("use_macaroon");
 
     // Create the owner's macaroon and serialise it
     std::string location = "https://www.unused.com/";
     std::string key = "a_bad_key";
     std::string identifier = "bad_key_id";
-    std::vector<std::string> first_party_caveats = {"access = r/w/x"};
-    std::vector<std::string> first_party_caveats_attenuation = {"access = r"};
+    std::string fpc_0 = "access = r/w/x";
+    std::string fpc_1 = "access = r";
 
     // Create a resource owner
     auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, user_topic);
-    (*resource_owner).initialise_macaroon(location, key, identifier, first_party_caveats);
-    (*resource_owner).initialise_verifier(key, first_party_caveats);
+    (*resource_owner).initialise_macaroon(location, key, identifier);
+    (*resource_owner).initialise_verifier(key);
+    (*resource_owner).add_first_party_caveat(fpc_0);  // adds to macaroon and verifier
+
+    // Create an intermediate resource user
+    auto resource_intermediary = std::make_shared<ResourceUser>("intermediary", intermediary_topic, issuer_topic);
 
     // Create a resource user
-    auto resource_user = std::make_shared<ResourceUser>("user", user_topic, issuer_topic);
+    auto resource_user = std::make_shared<ResourceUser>("user", user_topic, intermediary_topic);
 
     int max_iterations = 15;
     for (int i = 0; i < max_iterations; i++)
     {
       exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_intermediary);
       exec.spin_node_some(resource_user);
 
       // add a third party caveat to the Macaroon being sent
       if(i == (int)(max_iterations/3))
       {
-        std::cout << std::endl << "<<< Adding Macaroon caveat >>> " << std::endl;
-        (*resource_owner).add_first_party_caveats_macaroon(first_party_caveats_attenuation);
+        std::cout << std::endl << "<<< Adding Macaroon caveat to Intermediary >>> " << std::endl;
+        (*resource_intermediary).add_first_party_caveat(fpc_1);
       }
 
-      // add the third party caveat to the MacaroonVerifier
-      // add two iterations later to test if the verification fails
+      // (a few iterations later...) add the third party caveat to the MacaroonVerifier
       if(i == (int)(2*max_iterations/3))
       {
-        std::cout << std::endl << "<<< Adding MacaroonVerifier caveat >>> " << std::endl;
-        (*resource_owner).add_first_party_caveats_verifier(first_party_caveats_attenuation);
+        std::cout << std::endl << "<<< Adding MacaroonVerifier caveat to Owner >>> " << std::endl;
+        (*resource_owner).add_first_party_caveat_verifier(fpc_1);
       }      
 
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));

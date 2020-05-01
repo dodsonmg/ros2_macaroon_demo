@@ -13,54 +13,39 @@ ResourceOwner::run(void)
     verify_macaroon();
 }
 
-// Initialise the Macaroon, with or without caveats
+// Initialise the Macaroon.  Caveats added after.
 // This function is only used by the Macaroon owner, who has the key
 void
-ResourceOwner::initialise_macaroon(const std::string location, const std::string key,
-    const std::string identifier, const std::vector<std::string> first_party_caveats)
+ResourceOwner::initialise_macaroon(const std::string location, const std::string key, const std::string identifier)
 {
-    ResourceBase::M_send_.initialise(location, key, identifier);
-    if(first_party_caveats.size() > 0)
-    {
-        for (size_t i = 0; i < first_party_caveats.size(); i++)
-        {
-            ResourceBase::M_send_.add_first_party_caveat(first_party_caveats[i]);
-        }
-    }
+    ResourceBase::M_.initialise(location, key, identifier);
 }
 
-// Initialise the MacaroonVerifier, with or without caveats
+// Initialise the MacaroonVerifier.  Caveats added after.
 // This function is only used by the Macaroon owner, who has the key
 void
-ResourceOwner::initialise_verifier(const std::string key, const std::vector<std::string> first_party_caveats)
+ResourceOwner::initialise_verifier(const std::string key)
 {
     V_.initialise(key);
-    if(first_party_caveats.size() > 0)
-    {
-        for (size_t i = 0; i < first_party_caveats.size(); i++)
-        {
-            V_.satisfy_exact(first_party_caveats[i]);
-        }
-    }
 }
 
+// Add a first party caveat to the "owned" Macaroon by calling the Base class
+// Add the same caveat to the MacaroonVerifier maintained by this derived class
 void
-ResourceOwner::add_first_party_caveats_macaroon(const std::vector<std::string> first_party_caveats)
+ResourceOwner::add_first_party_caveat(const std::string first_party_caveat)
 {
-    ResourceBase::add_first_party_caveats_macaroon(first_party_caveats);
+    ResourceBase::add_first_party_caveat(first_party_caveat);
+    add_first_party_caveat_verifier(first_party_caveat);
 }
 
 // add first party caveats to the MacaroonVerifier
 // This function is only used by the Macaroon owner
 void
-ResourceOwner::add_first_party_caveats_verifier(const std::vector<std::string> first_party_caveats)
+ResourceOwner::add_first_party_caveat_verifier(const std::string first_party_caveat)
 {
-    if(V_.initialised() && first_party_caveats.size() > 0)
+    if(V_.initialised() && first_party_caveat.size() > 0)
     {
-        for (size_t i = 0; i < first_party_caveats.size(); i++)
-        {
-            V_.satisfy_exact(first_party_caveats[i]);
-        }
+        V_.satisfy_exact(first_party_caveat);
     }    
 }
 

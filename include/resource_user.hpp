@@ -20,7 +20,7 @@ class ResourceUser : public ResourceBase
 public:
     ResourceUser(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic);
 
-    void add_first_party_caveats_macaroon(const std::vector<std::string> first_party_caveats = {});
+    void add_first_party_caveat(const std::string first_party_caveat = "");
 
 private:
     void run(void);

@@ -20,11 +20,10 @@ class ResourceOwner : public ResourceBase
 public:
     ResourceOwner(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic);
 
-    void initialise_macaroon(const std::string location, const std::string key,
-        const std::string identifier, const std::vector<std::string> first_party_caveats = {});
-    void initialise_verifier(const std::string key, const std::vector<std::string> first_party_caveats = {});        
-    void add_first_party_caveats_macaroon(const std::vector<std::string> first_party_caveats = {});
-    void add_first_party_caveats_verifier(const std::vector<std::string> first_party_caveats = {});
+    void initialise_macaroon(const std::string location, const std::string key, const std::string identifier);
+    void initialise_verifier(const std::string key);        
+    void add_first_party_caveat(const std::string first_party_caveat = "");
+    void add_first_party_caveat_verifier(const std::string first_party_caveat = "");
 
 private:
     void run(void);
