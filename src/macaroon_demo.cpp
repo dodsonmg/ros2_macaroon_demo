@@ -69,14 +69,14 @@ int main(int argc, char * argv[])
       exec.spin_node_some(resource_intermediary);
       exec.spin_node_some(resource_user);
 
-      // add a third party caveat to the Macaroon being sent
+      // add a first party caveat to the Macaroon being sent
       if(i == (int)(max_iterations/3))
       {
         std::cout << std::endl << "<<< Adding Macaroon caveat to Intermediary >>> " << std::endl;
         (*resource_intermediary).add_first_party_caveat(fpc_1);
       }
 
-      // (a few iterations later...) add the third party caveat to the MacaroonVerifier
+      // (a few iterations later...) add the first party caveat to the MacaroonVerifier
       if(i == (int)(2*max_iterations/3))
       {
         std::cout << std::endl << "<<< Adding MacaroonVerifier caveat to Owner >>> " << std::endl;
