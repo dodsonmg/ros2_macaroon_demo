@@ -14,6 +14,11 @@
 /* macaroons */
 #include "macaroons/macaroons.hpp"
 
+// #include "resource_base.hpp"
+#include "resource_owner.hpp"
+#include "resource_user.hpp"
+
+
 using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
@@ -35,129 +40,52 @@ int main(int argc, char * argv[])
     // Establish the topics for delegating a macaroon and receiving one for verification.
     // A -> <issuer_topic> -> B -> <attenuator_topic> -> C -> <user_topic> -> A
     auto issuer_topic = std::string("issue_macaroon");
-    auto attenuator_topic = std::string("attenuate_macaroon");
+    auto intermediary_topic = std::string("attenuate_macaroon");
     auto user_topic = std::string("use_macaroon");
 
     // Create the owner's macaroon and serialise it
     std::string location = "https://www.unused.com/";
     std::string key = "a_bad_key";
     std::string identifier = "bad_key_id";
-    std::string predicate = "access = r/w/x";
-    Macaroon M_owner(location, key, identifier);
-    Macaroon M_owner_received;
-    M_owner.add_first_party_caveat(predicate);
-    std::string M_owner_serialised = M_owner.serialise();
-    std::string M_received_serialised;
+    std::string fpc_0 = "access = r/w/x";
+    std::string fpc_1 = "access = r";
 
-    // Create and initialise the owner's MacaroonVerifier
-    MacaroonVerifier V_owner(key);
-    V_owner.satisfy_exact(predicate);
+    // Create a resource owner
+    auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, user_topic);
+    (*resource_owner).initialise_macaroon(location, key, identifier);
+    (*resource_owner).initialise_verifier(key);
+    (*resource_owner).add_first_party_caveat(fpc_0);  // adds to macaroon and verifier
 
-    // Create NULL macaroons for the intermediate node and user
-    Macaroon M_intermediate;
-    Macaroon M_user;
+    // Create an intermediate resource user
+    auto resource_intermediary = std::make_shared<ResourceUser>("intermediary", intermediary_topic, issuer_topic);
 
-    // Create empty strings for serialised macaroons for intermediate and user
-    std::string M_intermediate_serialised;
-    std::string M_user_serialised;
+    // Create a resource user
+    auto resource_user = std::make_shared<ResourceUser>("user", user_topic, intermediary_topic);
 
-    // Create a predicate for the intermediate to add
-    std::string attenuation_predicate = "access = r";
-
-    // Create a node for publishing the owner's macaroon and for receiving a macaroon from a user for verification.
-    auto owner_talker = std::make_shared<TalkerNode>("owner_talker", issuer_topic);
-    auto owner_listener = std::make_shared<ListenerNode>("owner_listener", user_topic);
-
-    // Create a node for receiving a macaroon and for transmitting to the final user.
-    auto intermediate_talker = std::make_shared<TalkerNode>("intermediate_talker", attenuator_topic);
-    auto intermediate_listener = std::make_shared<ListenerNode>("intermediate_listener", issuer_topic);
-
-    // Create a node for receiving a macaroon and transmitting it back to the owner
-    auto user_talker = std::make_shared<TalkerNode>("user_talker", user_topic);
-    auto user_listener = std::make_shared<ListenerNode>("user_listener", attenuator_topic);
-
-
-    int max_loops = 10;
-    for (int i = 0; i < max_loops; i++)
+    int max_iterations = 15;
+    for (int i = 0; i < max_iterations; i++)
     {
-      /**********************
-      *  OWNER FUNCTIONS
-      **********************/
-      std::cout << std::endl << "<<< Perform owner functions >>>" << std::endl;
-      (*owner_talker).put_message(M_owner_serialised);
-      exec.spin_node_once(owner_talker);
-      exec.spin_node_once(owner_listener);
+      exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_intermediary);
+      exec.spin_node_some(resource_user);
 
-      M_received_serialised = (*owner_listener).get_message();
-
-      if(M_received_serialised.size() > 0)
+      // add a first party caveat to the Macaroon being sent
+      if(i == (int)(max_iterations/3))
       {
-        // desearialise the received macaroon
-        M_owner_received.deserialise(M_received_serialised);
-
-        // verify the macaroon
-        int result = V_owner.verify(M_owner_received);
-        if (result == 0)
-        {
-            std::cout << "\t<<< MACAROON VERIFIED >>>" << std::endl;
-        }
-        else
-        {
-          std::cout << "\t<<< VERIFICATION FAILED: " << V_owner.get_verifier_error() << " >>>" << std::endl;
-        }
-        
-        M_received_serialised = "";
+        std::cout << std::endl << "<<< Adding Macaroon caveat to Intermediary >>> " << std::endl;
+        (*resource_intermediary).add_first_party_caveat(fpc_1);
       }
 
-      // add the attenuation caveat partway through the loop, for demo purposes
-      if(i == max_loops/2)
+      // (a few iterations later...) add the first party caveat to the MacaroonVerifier
+      if(i == (int)(2*max_iterations/3))
       {
-        std::cout << "\t<<< Adding attenuation caveat >>>" << std::endl;
-        V_owner.satisfy_exact(attenuation_predicate);
-      }
+        std::cout << std::endl << "<<< Adding MacaroonVerifier caveat to Owner >>> " << std::endl;
+        (*resource_owner).add_first_party_caveat_verifier(fpc_1);
+      }      
 
-      /************************
-      *  INTERMEDIATE FUNCTIONS
-      ************************/
-      std::cout << std::endl << "<<< Perform intermediate functions >>>" << std::endl;
-      exec.spin_node_once(intermediate_listener);  // listen for a published macaroon
-      M_intermediate_serialised = (*intermediate_listener).get_message();  // get any serialised message
-
-      // if we received a serialised macaroon, add a caveat and forward to the user
-      if(M_intermediate_serialised.size() > 0)
-      {
-        // add a caveat to the macaroon before forwarding to the user
-        M_intermediate.deserialise(M_intermediate_serialised);
-        M_intermediate.add_first_party_caveat(attenuation_predicate);
-        M_intermediate_serialised = M_intermediate.serialise();
-
-        (*intermediate_talker).put_message(M_intermediate_serialised);
-        exec.spin_node_once(intermediate_talker);
-      }
-
-      /**********************
-      *  USER FUNCTIONS
-      **********************/
-      std::cout << std::endl << "<<< Perform user functions >>>" << std::endl;
-      exec.spin_node_once(user_listener);  // listen for a published macaroon
-      M_user_serialised = (*user_listener).get_message();  // get any serialised message
-
-      // if we received a serialised macaroon, desearialise it, do something, then return it to owner
-      if(M_user_serialised.size() > 0)
-      {
-        // M_user.deserialise(M_user_serialised);
-        /* do something with the macaroon */
-        // M_user_serialised = M_user.serialise();
-
-        (*user_talker).put_message(M_user_serialised);
-        exec.spin_node_once(user_talker);
-      }
-      
-      /**********************
-      *  SPIN
-      **********************/      
-      std::cout << std::endl << "<<< spinning... >>>" << std::endl;
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      std::cout << std::endl;
     }
 
     rclcpp::shutdown();
