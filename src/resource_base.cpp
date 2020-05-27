@@ -9,27 +9,11 @@ ResourceBase::ResourceBase(const std::string & node_name, const std::string & pu
     T_ = std::make_shared<TalkerNode>(node_name + "_talker", publish_topic);
     L_ = std::make_shared<ListenerNode>(node_name + "_listener", subscribe_topic);
 
-    // auto authentication_and_resource_request_cb = 
-    //     [this](const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) -> void
-    //     {
-    //         RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
-    //             msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
-    //     };
-
-    // if(authentication_topic.size() > 0)
-    // {
-        // T_auth_ = std::make_shared<TalkerNode>(node_name_ + "_auth" + "_talker", authentication_topic);
-        // L_auth_ = std::make_shared<ListenerNode>(node_name_ + "_auth" + "_listener", authentication_topic);
-    // if(node_name_ == "user")
-        // authentication_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10);
-    // if(node_name_ == "owner")
-        // authentication_sub_ = create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10, authentication_and_resource_request_cb);
-        // if(node_name_ == "owner")
-        // {
-            // authentication_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(
-            //     authentication_topic, 10, std::bind(&ResourceBase::authentication_and_resource_request_cb, this, _1));
-        // }
-    // }
+    // create a publisher for sending authentication and resource requests
+    authentication_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10);
+    
+    resource_and_discharge_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::DischargeMacaroons>(
+        authentication_topic, 10, std::bind(&ResourceBase::resource_and_discharge_macaroons_cb, this, _1));    
 
     M_received_fresh_ = false;
     MS_received_fresh_ = false;
@@ -39,7 +23,7 @@ void
 ResourceBase::run(void)
 {
     // publish_macaroon();
-    exec_.spin_node_some(L_);  // allow the ListenerNode callback to execute
+    // exec_.spin_node_some(L_);  // allow the ListenerNode callback to execute
     // receive_macaroon();
 }
 
@@ -73,15 +57,7 @@ ResourceBase::publish_macaroon(void)
     if(M_.initialised())
     {
         // Derive a new Macaroon from M_ and add caveats
-        Macaroon M_send = M_;
-        for(std::string fpc : first_party_caveats_)
-        {
-            M_send.add_first_party_caveat(fpc);
-        }
-        for(ThirdPartyCaveat tpc : third_party_caveats_)
-        {
-            M_send.add_third_party_caveat(tpc.location, tpc.key, tpc.identifier);
-        }
+        Macaroon M_send = apply_caveats();
 
         // publish the serialised Macaroon with caveats
         (*T_).publish_message(M_send.serialise());
@@ -90,6 +66,28 @@ ResourceBase::publish_macaroon(void)
         macaroons.push_back(M_send.serialise());
         (*T_).publish_macaroons_message(macaroons);
     }
+}
+
+Macaroon
+ResourceBase::apply_caveats(void)
+{
+    if(M_.initialised())
+    {
+        // Derive a new Macaroon from M_ and add caveats
+        Macaroon M_applied = M_;
+        for(std::string fpc : first_party_caveats_)
+        {
+            M_applied.add_first_party_caveat(fpc);
+        }
+        for(ThirdPartyCaveat tpc : third_party_caveats_)
+        {
+            M_applied.add_third_party_caveat(tpc.location, tpc.key, tpc.identifier);
+        }
+
+        return M_applied;
+    }
+    
+    return NULL;
 }
 
 void
@@ -125,14 +123,79 @@ ResourceBase::receive_macaroon(void)
     }
 }
 
-/*
-Callback functions
-*/
+// Send a request to a resource owner to initiate TOFU
+// TODO:  Possibly move the 'resource' to a private variable?  For this PoC, we're only dealing with one resource.
+void
+ResourceBase::authentication_and_resource_request(const std::string resource)
+{
+    // TODO: these should be initialised elsewhere.
+    // TODO: this should generate a key and an id.  possibly the id should just be the resource??
+    TOFU_key_ = random_string(32);
+    TOFU_location_ = "https://www.unused_third_party.com/";
+    TOFU_identifier_ = resource;
+    TOFU_resource_ = resource;
 
-// // Create a callback function for when resource access request messages are received.
-// void
-// ResourceBase::authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) const
-// {
-//     RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
-//         msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
-// }
+    // publish the request
+    auto msg = std::make_unique<macaroon_msgs::msg::MacaroonResourceRequest>();
+    msg->key = TOFU_key_;
+    msg->location = TOFU_location_;
+    msg->identifier = TOFU_identifier_;
+    msg->resource = TOFU_resource_;
+    RCLCPP_INFO(this->get_logger(), "Publishing resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
+        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
+
+    // Put the message into a queue to be processed by the middleware.
+    // This call is non-blocking.
+    authentication_pub_->publish(std::move(msg));
+}
+
+void
+ResourceBase::print_macaroon()
+{
+    // Derive a new Macaroon from M_ and add caveats
+    Macaroon M_applied = apply_caveats();
+    M_applied.print_macaroon();
+}
+
+void
+ResourceBase::print_discharge_macaroon()
+{
+    D_.print_macaroon();
+}
+
+// Create a callback function for when a resource and discharge macaroon are returned.
+void
+ResourceBase::resource_and_discharge_macaroons_cb(const macaroon_msgs::msg::DischargeMacaroons::SharedPtr msg)
+{
+    RCLCPP_INFO(this->get_logger(), "Received resource/discharge macaroon pair");
+
+    // Add serialised resource and discharge macaroons to the message
+    M_received_.deserialise(msg->resource_macaroon.macaroon);
+    D_.deserialise(msg->discharge_macaroon.macaroon);
+
+    M_received_.print_macaroon();
+    D_.print_macaroon();
+}
+
+/*
+DANGER:  This came from GitHub...
+https://github.com/InversePalindrome/Blog/tree/master/RandomString
+*/
+std::string
+ResourceBase::random_string(std::size_t length)
+{
+    const std::string characters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+    std::random_device random_device;
+    std::mt19937 generator(random_device());
+    std::uniform_int_distribution<> distribution(0, characters.size() - 1);
+
+    std::string random_string;
+
+    for (std::size_t i = 0; i < length; ++i)
+    {
+        random_string += characters[distribution(generator)];
+    }
+
+    return random_string;
+}

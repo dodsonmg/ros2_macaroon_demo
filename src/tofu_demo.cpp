@@ -18,7 +18,6 @@
 #include "resource_owner.hpp"
 #include "resource_user.hpp"
 
-
 using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
@@ -40,25 +39,32 @@ int main(int argc, char * argv[])
     // Establish the topics for delegating a macaroon and receiving one for verification.
     // A -> <issuer_topic> -> B -> <attenuator_topic> -> C -> <user_topic> -> A
     auto issuer_topic = std::string("issue_macaroon");
-    // auto intermediary_topic = std::string("attenuate_macaroon");
+    auto intermediary_topic = std::string("attenuate_macaroon");
     auto user_topic = std::string("use_macaroon");
     auto authentication_topic = std::string("authentication");
 
-    // User -> Owner:  request "access" via message (provide key and id)
-    std::string resource = "cmd_vel";
-
-    auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, issuer_topic, authentication_topic);
-    // (*resource_owner).authentication_and_resource_request(resource);
-
-
+    // instantiate nodes and spin a few times
+    std::string location = "https://www.unused.com/";
+    std::string identifier = "cmd_vel";  // this is the resource owned or requested
+    auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, user_topic, authentication_topic, location, identifier);
     auto resource_user = std::make_shared<ResourceUser>("user", user_topic, issuer_topic, authentication_topic);
-    (*resource_user).authentication_and_resource_request(resource);
-    
+
     for (int i = 1; i < 10; ++i)
     {
       exec.spin_node_some(resource_owner);
       exec.spin_node_some(resource_user);
-      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // User -> Owner:  request "access" via message (provide key and id)
+    std::string resource = "cmd_vel";
+    (*resource_user).authentication_and_resource_request(resource);
+    
+    for (int i = 1; i < 20; ++i)
+    {
+      exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_user);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // Owner -> User:  if approved, send discharge macaroon and resource macaroon with appropriate third party caveat
@@ -73,10 +79,7 @@ int main(int argc, char * argv[])
 
     // Owner:  extract request from resource macaroon
 
-    // Create the owner's macaroon
-    // std::string location = "https://www.unused.com/";
-    // std::string key = "a_bad_key";
-    // std::string identifier = "bad_key_id";
+
 
     // // Create a resource owner
     // // auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, issuer_topic, authentication_topic);
