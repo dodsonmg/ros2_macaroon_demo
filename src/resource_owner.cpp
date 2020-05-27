@@ -19,8 +19,6 @@ ResourceOwner::ResourceOwner(const std::string & node_name, const std::string & 
     // initialise the authentication subscriber
     authentication_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(
         authentication_topic, 10, std::bind(&ResourceOwner::authentication_and_resource_request_cb, this, _1));
-
-    authentication_and_resource_request_ = false;
 }
 
 void
@@ -28,12 +26,6 @@ ResourceOwner::run(void)
 {
     ResourceBase::run();
     // verify_macaroon();
-
-    // if there is a pending request, send a resource and discharge macaroon to a user
-    if(authentication_and_resource_request_)
-    {
-        publish_resource_and_discharge_macaroons();
-    }
 }
 
 // Initialise the Macaroon.  Caveats added after.
@@ -114,8 +106,7 @@ ResourceOwner::authentication_and_resource_request_cb(const macaroon_msgs::msg::
     ResourceBase::add_third_party_caveat(in_msg->location, in_msg->key, in_msg->identifier);
     ResourceBase::print_macaroon();
 
-    authentication_and_resource_request_ = true;
-
+    publish_resource_and_discharge_macaroons();
 }
 
 void
@@ -134,6 +125,4 @@ ResourceOwner::publish_resource_and_discharge_macaroons()
     resource_and_discharge_macaroon_pub_->publish(std::move(out_msg));
 
     RCLCPP_INFO(this->get_logger(), "Published resource/discharge macaroon pair");
-
-    authentication_and_resource_request_ = false;
 }

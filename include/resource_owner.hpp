@@ -38,9 +38,6 @@ private:
     std::string key_;
     std::string identifier_;
     std::string location_;
-    
-    // track if there is a pending request for a resource and discharge macaroon
-    bool authentication_and_resource_request_;
 
     // Publishers
     rclcpp::Publisher<macaroon_msgs::msg::DischargeMacaroons>::SharedPtr resource_and_discharge_macaroon_pub_; 

@@ -57,6 +57,7 @@ int main(int argc, char * argv[])
     }
 
     // User -> Owner:  request "access" via message (provide key and id)
+    // Owner -> User:  if approved, send discharge macaroon and resource macaroon with appropriate third party caveat
     std::string resource = "cmd_vel";
     (*resource_user).authentication_and_resource_request(resource);
     
@@ -66,8 +67,6 @@ int main(int argc, char * argv[])
       exec.spin_node_some(resource_user);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-
-    // Owner -> User:  if approved, send discharge macaroon and resource macaroon with appropriate third party caveat
 
     // User:  add request to resource macaroon
 
