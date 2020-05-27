@@ -9,11 +9,27 @@ ResourceBase::ResourceBase(const std::string & node_name, const std::string & pu
     T_ = std::make_shared<TalkerNode>(node_name + "_talker", publish_topic);
     L_ = std::make_shared<ListenerNode>(node_name + "_listener", subscribe_topic);
 
-    if(authentication_topic.size() > 0)
-    {
-        T_auth_ = std::make_shared<TalkerNode>(node_name_ + "_auth" + "_talker", authentication_topic);
-        L_auth_ = std::make_shared<ListenerNode>(node_name_ + "_auth" + "_listener", authentication_topic);
-    }
+    // auto authentication_and_resource_request_cb = 
+    //     [this](const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) -> void
+    //     {
+    //         RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
+    //             msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
+    //     };
+
+    // if(authentication_topic.size() > 0)
+    // {
+        // T_auth_ = std::make_shared<TalkerNode>(node_name_ + "_auth" + "_talker", authentication_topic);
+        // L_auth_ = std::make_shared<ListenerNode>(node_name_ + "_auth" + "_listener", authentication_topic);
+    // if(node_name_ == "user")
+        // authentication_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10);
+    // if(node_name_ == "owner")
+        // authentication_sub_ = create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10, authentication_and_resource_request_cb);
+        // if(node_name_ == "owner")
+        // {
+            // authentication_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(
+            //     authentication_topic, 10, std::bind(&ResourceBase::authentication_and_resource_request_cb, this, _1));
+        // }
+    // }
 
     M_received_fresh_ = false;
     MS_received_fresh_ = false;
@@ -22,9 +38,9 @@ ResourceBase::ResourceBase(const std::string & node_name, const std::string & pu
 void
 ResourceBase::run(void)
 {
-    publish_macaroon();
+    // publish_macaroon();
     exec_.spin_node_some(L_);  // allow the ListenerNode callback to execute
-    receive_macaroon();
+    // receive_macaroon();
 }
 
 // Initialise a discharge Macaroon.  Caveats added after.
@@ -33,21 +49,6 @@ void
 ResourceBase::initialise_discharge_macaroon(const std::string location, const std::string key, const std::string identifier)
 {
     D_.initialise(location, key, identifier);
-}
-
-// Send a request to a resource owner to initiate TOFU
-// TODO:  Possibly move the 'resource' to a private variable?  For this PoC, we're only dealing with one resource.
-void
-ResourceBase::request_resource_access(const std::string resource)
-{
-    // TODO: this should generate a key and an id.  possibly the id should just be the resource??
-    TOFU_key_ = "another_bad_key:";
-    TOFU_location_ = "https://www.unused_third_party.com/";
-    TOFU_identifier_ = "another_bad_key_id";
-    TOFU_resource_ = resource;
-
-    // publish the request
-    (*T_auth_).publish_resource_access_request(TOFU_key_, TOFU_location_, TOFU_identifier_, TOFU_resource_);
 }
 
 // Add a first party caveat to the "owned" Macaroon by calling the Base class
@@ -123,3 +124,15 @@ ResourceBase::receive_macaroon(void)
         }
     }
 }
+
+/*
+Callback functions
+*/
+
+// // Create a callback function for when resource access request messages are received.
+// void
+// ResourceBase::authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) const
+// {
+//     RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
+//         msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
+// }

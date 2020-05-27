@@ -20,6 +20,7 @@ TalkerNode::TalkerNode(const std::string & node_name, const std::string & topic_
     // they must have compatible Quality of Service policies (in this case, buffer size of 10?).
     pub_ = this->create_publisher<std_msgs::msg::String>(topic_name, 10);
     macaroons_pub_ = this->create_publisher<macaroon_msgs::msg::Macaroons>(topic_name, 10);
+    authentication_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonResourceRequest>(topic_name, 10);
 }
 
 void

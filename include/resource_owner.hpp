@@ -31,6 +31,12 @@ private:
     bool verify_macaroon(void);
 
     MacaroonVerifier V_;
+    
+    // Subscribers
+    rclcpp::Subscription<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_sub_;
+
+    // Callbacks
+    void authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) const;    
 };
 
 #endif // RESOURCE_OWNER_HPP

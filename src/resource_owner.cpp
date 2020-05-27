@@ -5,6 +5,9 @@ ResourceOwner::ResourceOwner(const std::string & node_name, const std::string & 
 : ResourceBase(node_name, publish_topic, subscribe_topic, authentication_topic)
 {
     ResourceBase::timer_ = create_wall_timer(std::chrono::milliseconds(500), std::bind(&ResourceOwner::run, this));
+
+    authentication_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(
+        authentication_topic, 10, std::bind(&ResourceOwner::authentication_and_resource_request_cb, this, _1));
 }
 
 void
@@ -72,4 +75,12 @@ ResourceOwner::verify_macaroon(void)
     }
     
     return false;
+}
+
+// Create a callback function for when resource access request messages are received.
+void
+ResourceOwner::authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) const
+{
+    RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
+        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
 }

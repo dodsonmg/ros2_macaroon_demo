@@ -11,7 +11,6 @@ ListenerNode::ListenerNode(const std::string & node_name, const std::string & to
 : Node(node_name)
 {
     // Create a callback function for when messages are received.
-    // Variations of this function also exist using, for example UniquePtr for zero-copy transport.
     auto string_cb =
         [this](const std_msgs::msg::String::SharedPtr msg) -> void
         {
@@ -23,7 +22,6 @@ ListenerNode::ListenerNode(const std::string & node_name, const std::string & to
         };
 
     // Create a callback function for when macaroon messages are received.
-    // Variations of this function also exist using, for example UniquePtr for zero-copy transport.
     auto macaroons_cb =
         [this](const macaroon_msgs::msg::Macaroons::SharedPtr msg) -> void
         {

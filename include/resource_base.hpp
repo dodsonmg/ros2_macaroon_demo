@@ -7,6 +7,11 @@
 #include "rclcpp/rclcpp.hpp"
 #include "talker_node.hpp"
 #include "listener_node.hpp"
+#include "std_msgs/msg/string.hpp"
+#include "macaroon_msgs/msg/macaroon.hpp"
+#include "macaroon_msgs/msg/macaroons.hpp"
+#include "macaroon_msgs/msg/macaroon_resource_request.hpp"
+using std::placeholders::_1;
 
 /* macaroons */
 #include "macaroons/macaroons.hpp"
@@ -19,7 +24,7 @@ public:
     ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic, 
                  const std::string & authorisation_topic);
 
-    void request_resource_access(const std::string resource = "");
+    // void authentication_and_resource_request(const std::string resource = "");
 
     void add_first_party_caveat(const std::string first_party_caveat = "");
     void add_third_party_caveat(const std::string location, const std::string key, const std::string identifier);
@@ -74,16 +79,25 @@ private:
     };
     std::vector<ThirdPartyCaveat> third_party_caveats_;
 
-    // used for third party caveats as part of TOFU
-    std::string TOFU_key_;
-    std::string TOFU_location_;
-    std::string TOFU_identifier_;
-    std::string TOFU_resource_;
+    // // used for third party caveats as part of TOFU
+    // std::string TOFU_key_;
+    // std::string TOFU_location_;
+    // std::string TOFU_identifier_;
+    // std::string TOFU_resource_;
 
     // This is a Discharge macaroon that allows the holder to discharge a third party caveat
     // TODO:  Generalise to some kind of dict, so we can use the 'identifier' in the third party caveat
     // to find the correct discharge macaroon.  In this case, we'll assume just one.
     Macaroon D_;
+
+    // Publishers
+    // rclcpp::Publisher<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_pub_;
+
+    // // Subscribers
+    // rclcpp::Subscription<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_sub_;
+
+    // // Callbacks
+    // void authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) const;
 };
 
 #endif // RESOURCE_BASE_HPP
