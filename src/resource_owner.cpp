@@ -1,7 +1,8 @@
 #include "resource_owner.hpp"
 
-ResourceOwner::ResourceOwner(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic)
-: ResourceBase(node_name, publish_topic, subscribe_topic)
+ResourceOwner::ResourceOwner(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic,
+                             const std::string & authentication_topic)
+: ResourceBase(node_name, publish_topic, subscribe_topic, authentication_topic)
 {
     ResourceBase::timer_ = create_wall_timer(std::chrono::milliseconds(500), std::bind(&ResourceOwner::run, this));
 }

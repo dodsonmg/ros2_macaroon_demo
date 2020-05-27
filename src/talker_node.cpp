@@ -1,8 +1,11 @@
 #include <chrono>
 
 #include "talker_node.hpp"
-#include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/string.hpp"
+// #include "rclcpp/rclcpp.hpp"
+// #include "std_msgs/msg/string.hpp"
+// #include "macaroon_msgs/msg/macaroon.hpp"
+// #include "macaroon_msgs/msg/macaroons.hpp"
+// #include "macaroon_msgs/msg/macaroon_resource_request.hpp"
 
 using namespace std::chrono_literals;
 
@@ -16,9 +19,7 @@ TalkerNode::TalkerNode(const std::string & node_name, const std::string & topic_
     // Note that not all publishers/subscribers on the same topic with the same type will be compatible:
     // they must have compatible Quality of Service policies (in this case, buffer size of 10?).
     pub_ = this->create_publisher<std_msgs::msg::String>(topic_name, 10);
-
-    // Use a timer to schedule periodic message publishing.
-    // timer_ = this->create_wall_timer(1s, publish_message);
+    macaroons_pub_ = this->create_publisher<macaroon_msgs::msg::Macaroons>(topic_name, 10);
 }
 
 void
@@ -34,14 +35,35 @@ TalkerNode::publish_message(const std::string msg_data)
     pub_->publish(std::move(msg));
 }
 
-// void
-// TalkerNode::put_message(const std::string & msg)
-// {
-//     // initialise msg_ with each call to put_message() due to std::move(msg_) in publish_message()
-//     msg_ = std::make_unique<std_msgs::msg::String>();
-//     msg_->data = msg;
-// }
+void
+TalkerNode::publish_macaroons_message(const std::vector<std::string> macaroons)
+{
+    auto data = std::make_unique<macaroon_msgs::msg::Macaroon>();
+    auto msg = std::make_unique<macaroon_msgs::msg::Macaroons>();
+    for (std::string macaroon : macaroons)
+    {
+        data->macaroon = macaroon;
+        msg->macaroons.push_back(*data);
+        RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", macaroon.c_str());
+    }
 
-// #include "rclcpp_components/register_node_macro.hpp"
+    // Put the message into a queue to be processed by the middleware.
+    // This call is non-blocking.
+    macaroons_pub_->publish(std::move(msg));
+}
 
-// RCLCPP_COMPONENTS_REGISTER_NODE(TalkerNode)
+void
+TalkerNode::publish_resource_access_request(const std::string key, const std::string location, const std::string identifier, const std::string resource)
+{
+    auto msg = std::make_unique<macaroon_msgs::msg::MacaroonResourceRequest>();
+    msg->key = key;
+    msg->location = location;
+    msg->identifier = identifier;
+    msg->resource = resource;
+    RCLCPP_INFO(this->get_logger(), "Publishing resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
+        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
+
+    // Put the message into a queue to be processed by the middleware.
+    // This call is non-blocking.
+    authentication_pub_->publish(std::move(msg));
+}

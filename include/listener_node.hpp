@@ -5,7 +5,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
-// #include "macaroon_test/visibility.h"
+#include "macaroon_msgs/msg/macaroons.hpp"
 
 /* macaroons */
 #include "macaroons/macaroons.hpp"
@@ -17,10 +17,13 @@ class ListenerNode : public rclcpp::Node
 public:
   ListenerNode(const std::string & node_name, const std::string & topic_name);
   std::string get_message(void);
+  std::vector<std::string> get_macaroons_message(void);
 
 private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_;
+  rclcpp::Subscription<macaroon_msgs::msg::Macaroons>::SharedPtr macaroons_sub_;
   std::string msg_;
+  std::vector<std::string> macaroons_;
   bool fresh_;
 };
 

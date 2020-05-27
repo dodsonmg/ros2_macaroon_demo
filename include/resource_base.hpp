@@ -16,9 +16,15 @@
 class ResourceBase : public rclcpp::Node
 {
 public:
-    ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic);
+    ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic, 
+                 const std::string & authorisation_topic);
+
+    void request_resource_access(const std::string resource = "");
 
     void add_first_party_caveat(const std::string first_party_caveat = "");
+    void add_third_party_caveat(const std::string location, const std::string key, const std::string identifier);
+
+    void initialise_discharge_macaroon(const std::string location, const std::string key, const std::string identifier);
 
 protected:
     void run(void);
@@ -33,9 +39,11 @@ protected:
     // For resource intermediaries and users, it should be assigned to M_
     // For resource owners, it is separate from M_ and is verified by a MacaroonVerifier
     Macaroon M_received_;
+    std::vector<Macaroon> MS_received_;
 
     // This is set to true after receiving a valid Macaroon
     bool M_received_fresh_;
+    bool MS_received_fresh_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
@@ -44,18 +52,38 @@ private:
     // within the same process
     rclcpp::executors::SingleThreadedExecutor exec_;
 
+    // hold the name of the ROS node encapsulated by this class
+    // TODO:  It may be appropriate to encapsulate multiple nodes eventually...
+    std::string node_name_;
+
     // Define shared pointers to wrap the talker and listener nodes
     std::shared_ptr<TalkerNode> T_;
     std::shared_ptr<ListenerNode> L_;
+    std::shared_ptr<TalkerNode> T_auth_;
+    std::shared_ptr<ListenerNode> L_auth_;
 
     // Define a vector to hold first party caveats.  These will be applied against a macaroon before sending
     std::vector<std::string> first_party_caveats_;
 
-    // TODO:  Populate these for received Macaroons if we are not the owner?
-    std::string location_;
-    std::string identifier_;
+    // Define a vector to hold third party caveats.  These will be applied against a macaroon before sending
+    struct ThirdPartyCaveat
+    {
+        std::string location;
+        std::string key;
+        std::string identifier;
+    };
+    std::vector<ThirdPartyCaveat> third_party_caveats_;
 
+    // used for third party caveats as part of TOFU
+    std::string TOFU_key_;
+    std::string TOFU_location_;
+    std::string TOFU_identifier_;
+    std::string TOFU_resource_;
 
+    // This is a Discharge macaroon that allows the holder to discharge a third party caveat
+    // TODO:  Generalise to some kind of dict, so we can use the 'identifier' in the third party caveat
+    // to find the correct discharge macaroon.  In this case, we'll assume just one.
+    Macaroon D_;
 };
 
 #endif // RESOURCE_BASE_HPP

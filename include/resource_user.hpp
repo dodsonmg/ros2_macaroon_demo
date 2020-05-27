@@ -18,7 +18,8 @@
 class ResourceUser : public ResourceBase
 {
 public:
-    ResourceUser(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic);
+    ResourceUser(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic,
+                 const std::string & authentication_topic = "");
 
     void add_first_party_caveat(const std::string first_party_caveat = "");
 

@@ -23,6 +23,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(macaroon_msgs REQUIRED)
 find_package(libmacaroons REQUIRED)
 
 add_executable(macaroon_demo
@@ -35,11 +36,27 @@ add_executable(macaroon_demo
 target_include_directories(macaroon_demo PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-ament_target_dependencies(macaroon_demo rclcpp rclcpp_components std_msgs libmacaroons)
+ament_target_dependencies(macaroon_demo rclcpp rclcpp_components std_msgs macaroon_msgs libmacaroons)
 
 install(TARGETS
   macaroon_demo
   DESTINATION lib/${PROJECT_NAME})
+
+add_executable(tofu_demo
+  src/tofu_demo.cpp
+  src/talker_node.cpp
+  src/listener_node.cpp
+  src/resource_base.cpp
+  src/resource_owner.cpp
+  src/resource_user.cpp)
+target_include_directories(tofu_demo PRIVATE
+$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+$<INSTALL_INTERFACE:include>)
+ament_target_dependencies(tofu_demo rclcpp rclcpp_components std_msgs macaroon_msgs libmacaroons)
+
+install(TARGETS
+tofu_demo
+DESTINATION lib/${PROJECT_NAME})
 
 print_all_variables()
 

@@ -13,11 +13,13 @@
   <build_depend>rclcpp</build_depend>
   <build_depend>rclcpp_components</build_depend>
   <build_depend>std_msgs</build_depend>
+  <build_depend>macaroon_msgs</build_depend>
   <build_depend>libmacaroons</build_depend>
 
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>macaroon_msgs</exec_depend>
   <exec_depend>libmacaroons</exec_depend>
 
   <export>
