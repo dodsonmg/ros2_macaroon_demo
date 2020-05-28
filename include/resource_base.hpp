@@ -26,8 +26,7 @@ using std::placeholders::_1;
 class ResourceBase : public rclcpp::Node
 {
 public:
-    ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic, 
-                 const std::string & authorisation_topic, const std::string & command_topic);
+    ResourceBase(const std::string & node_name, const std::string & authorisation_topic, const std::string & command_topic);
 
     void authentication_and_resource_request(const std::string resource);
 
@@ -68,8 +67,6 @@ protected:
 
     // pub/sub topics
     std::string authentication_topic_;
-    std::string publish_topic_;
-    std::string subscribe_topic_;
     std::string command_topic_;
 
     rclcpp::TimerBase::SharedPtr timer_;
@@ -87,12 +84,6 @@ private:
     // TODO:  It may be appropriate to encapsulate multiple nodes eventually...
     std::string node_name_;
 
-    // Define shared pointers to wrap the talker and listener nodes
-    std::shared_ptr<TalkerNode> T_;
-    std::shared_ptr<ListenerNode> L_;
-    std::shared_ptr<TalkerNode> T_auth_;
-    std::shared_ptr<ListenerNode> L_auth_;
-
     // Define a vector to hold first party caveats.  These will be applied against a macaroon before sending
     std::vector<std::string> first_party_caveats_;
 
@@ -109,7 +100,6 @@ private:
     std::string TOFU_key_;
     std::string TOFU_location_;
     std::string TOFU_identifier_;
-    std::string TOFU_resource_;
 
     // Publishers
     rclcpp::Publisher<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_pub_;

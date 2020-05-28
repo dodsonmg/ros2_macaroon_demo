@@ -18,9 +18,8 @@
 class ResourceOwner : public ResourceBase
 {
 public:
-    ResourceOwner(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic,
-                  const std::string & authentication_topic, const std::string & command_topic, const std::string location = "", 
-                  const std::string identifier = "");
+    ResourceOwner(const std::string & node_name, const std::string & authentication_topic, const std::string & command_topic,
+                  const std::string location, const std::string identifier);
 
     void initialise_macaroon(void);
     void initialise_verifier(void);        

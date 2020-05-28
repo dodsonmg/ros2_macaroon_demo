@@ -1,19 +1,13 @@
 #include "resource_base.hpp"
 
-ResourceBase::ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic, 
-                           const std::string & authentication_topic, const std::string & command_topic)
+ResourceBase::ResourceBase(const std::string & node_name, const std::string & authentication_topic, const std::string & command_topic)
 : Node(node_name)
 {
     node_name_ = node_name;
 
     // store topic information
-    publish_topic_ = publish_topic;
-    subscribe_topic_ = subscribe_topic;
     authentication_topic_ = authentication_topic;
     command_topic_ = command_topic;
-
-    T_ = std::make_shared<TalkerNode>(node_name + "_talker", publish_topic);
-    L_ = std::make_shared<ListenerNode>(node_name + "_listener", subscribe_topic);
 
     // initialise publisher for sending authentication and resource requests
     authentication_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10);
@@ -64,22 +58,22 @@ ResourceBase::add_third_party_caveat(const std::string location, const std::stri
 }
 
 // Adds first and third party caveats and publishes a serialised Macaroon
-void
-ResourceBase::publish_macaroon(void)
-{
-    if(M_.initialised())
-    {
-        // Derive a new Macaroon from M_ and add caveats
-        Macaroon M_send = apply_caveats();
+// void
+// ResourceBase::publish_macaroon(void)
+// {
+//     if(M_.initialised())
+//     {
+//         // Derive a new Macaroon from M_ and add caveats
+//         Macaroon M_send = apply_caveats();
 
-        // publish the serialised Macaroon with caveats
-        (*T_).publish_message(M_send.serialise());
+//         // publish the serialised Macaroon with caveats
+//         (*T_).publish_message(M_send.serialise());
 
-        std::vector<std::string> macaroons;
-        macaroons.push_back(M_send.serialise());
-        (*T_).publish_macaroons_message(macaroons);
-    }
-}
+//         std::vector<std::string> macaroons;
+//         macaroons.push_back(M_send.serialise());
+//         (*T_).publish_macaroons_message(macaroons);
+//     }
+// }
 
 Macaroon
 ResourceBase::apply_caveats(void)
@@ -103,38 +97,38 @@ ResourceBase::apply_caveats(void)
     return NULL;
 }
 
-void
-ResourceBase::receive_macaroon(void)
-{
-    std::string msg_received = (*L_).get_message();
-    std::vector<std::string> macaroons_msg_received = (*L_).get_macaroons_message();
-    if (msg_received.size() > 0)
-    {
-        M_received_.deserialise(msg_received);
+// void
+// ResourceBase::receive_macaroon(void)
+// {
+//     std::string msg_received = (*L_).get_message();
+//     std::vector<std::string> macaroons_msg_received = (*L_).get_macaroons_message();
+//     if (msg_received.size() > 0)
+//     {
+//         M_received_.deserialise(msg_received);
 
-        if(M_received_.initialised())
-        {
-            M_received_fresh_ = true;
-        }
-    }
-    if (macaroons_msg_received.size() > 0)
-    {
-        for(std::string macaroon : macaroons_msg_received)
-        {
-            MS_received_.push_back(Macaroon(macaroon));
-        }
+//         if(M_received_.initialised())
+//         {
+//             M_received_fresh_ = true;
+//         }
+//     }
+//     if (macaroons_msg_received.size() > 0)
+//     {
+//         for(std::string macaroon : macaroons_msg_received)
+//         {
+//             MS_received_.push_back(Macaroon(macaroon));
+//         }
 
-        MS_received_fresh_ = true;
+//         MS_received_fresh_ = true;
 
-        for(Macaroon M : MS_received_)
-        {
-            if(!M.initialised())
-            {
-                MS_received_fresh_ = false;
-            }
-        }
-    }
-}
+//         for(Macaroon M : MS_received_)
+//         {
+//             if(!M.initialised())
+//             {
+//                 MS_received_fresh_ = false;
+//             }
+//         }
+//     }
+// }
 
 // Send a request to a resource owner to initiate TOFU
 void
