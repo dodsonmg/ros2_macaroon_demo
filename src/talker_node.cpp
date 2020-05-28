@@ -54,15 +54,14 @@ TalkerNode::publish_macaroons_message(const std::vector<std::string> macaroons)
 }
 
 void
-TalkerNode::publish_resource_access_request(const std::string key, const std::string location, const std::string identifier, const std::string resource)
+TalkerNode::publish_resource_access_request(const std::string key, const std::string location, const std::string identifier)
 {
     auto msg = std::make_unique<macaroon_msgs::msg::MacaroonResourceRequest>();
     msg->key = key;
     msg->location = location;
     msg->identifier = identifier;
-    msg->resource = resource;
     RCLCPP_INFO(this->get_logger(), "Publishing resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
-        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
+        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str());
 
     // Put the message into a queue to be processed by the middleware.
     // This call is non-blocking.

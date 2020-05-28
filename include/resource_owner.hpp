@@ -19,12 +19,13 @@ class ResourceOwner : public ResourceBase
 {
 public:
     ResourceOwner(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic,
-                  const std::string & authentication_topic = "", const std::string location = "", 
+                  const std::string & authentication_topic, const std::string & command_topic, const std::string location = "", 
                   const std::string identifier = "");
 
     void initialise_macaroon(void);
     void initialise_verifier(void);        
     void add_first_party_caveat(const std::string first_party_caveat = "");
+    void add_valid_command(const std::string command);
     void add_first_party_caveat_verifier(const std::string first_party_caveat = "");
 
 private:
@@ -40,13 +41,16 @@ private:
     std::string location_;
 
     // Publishers
-    rclcpp::Publisher<macaroon_msgs::msg::DischargeMacaroons>::SharedPtr resource_and_discharge_macaroon_pub_; 
+    rclcpp::Publisher<macaroon_msgs::msg::ResourceMacaroon>::SharedPtr resource_macaroon_pub_;
+    rclcpp::Publisher<macaroon_msgs::msg::DischargeMacaroon>::SharedPtr discharge_macaroon_pub_;
 
     // Subscribers
     rclcpp::Subscription<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_sub_;
+    rclcpp::Subscription<macaroon_msgs::msg::MacaroonCommand>::SharedPtr command_sub_;
 
     // Callbacks
-    void authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg);    
+    void authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg);
+    void command_cb(const macaroon_msgs::msg::MacaroonCommand::SharedPtr msg);    
 };
 
 #endif // RESOURCE_OWNER_HPP

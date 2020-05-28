@@ -1,24 +1,25 @@
 #include "resource_owner.hpp"
 
 ResourceOwner::ResourceOwner(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic,
-                             const std::string & authentication_topic, const std::string location, const std::string identifier)
-: ResourceBase(node_name, publish_topic, subscribe_topic, authentication_topic)
+                             const std::string & authentication_topic, const std::string & command_topic, 
+                             const std::string location, const std::string identifier)
+: ResourceBase(node_name, publish_topic, subscribe_topic, authentication_topic, command_topic)
 {
     ResourceBase::timer_ = create_wall_timer(std::chrono::milliseconds(500), std::bind(&ResourceOwner::run, this));
-
-    // store topic information
-    ResourceBase::publish_topic_ = publish_topic;
-    ResourceBase::subscribe_topic_ = subscribe_topic;
-    ResourceBase::authentication_topic_ = authentication_topic;
 
     // initialise the resource macaroon
     identifier_ = identifier;
     location_ = location;
     initialise_macaroon();
+    initialise_verifier();
 
     // initialise the authentication subscriber
     authentication_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(
-        authentication_topic, 10, std::bind(&ResourceOwner::authentication_and_resource_request_cb, this, _1));
+        ResourceBase::authentication_topic_, 10, std::bind(&ResourceOwner::authentication_and_resource_request_cb, this, _1));
+
+    // initialise the command subscriber
+    command_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonCommand>(
+        ResourceBase::command_topic_, 10, std::bind(&ResourceOwner::command_cb, this, _1));
 }
 
 void
@@ -52,6 +53,13 @@ ResourceOwner::add_first_party_caveat(const std::string first_party_caveat)
 {
     ResourceBase::add_first_party_caveat(first_party_caveat);
     add_first_party_caveat_verifier(first_party_caveat);
+}
+
+// Add a possible commands (as first party caveats) to the MacaroonVerifier
+void
+ResourceOwner::add_valid_command(const std::string command)
+{
+    add_first_party_caveat_verifier(command);
 }
 
 // add first party caveats to the MacaroonVerifier
@@ -93,8 +101,8 @@ ResourceOwner::verify_macaroon(void)
 void
 ResourceOwner::authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr in_msg)
 {
-    RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
-        in_msg->key.c_str(), in_msg->location.c_str(), in_msg->identifier.c_str(), in_msg->resource.c_str());
+    RCLCPP_INFO(this->get_logger(), "Received resource request (key: %s, location: %s, identifier: %s)", 
+        in_msg->key.c_str(), in_msg->location.c_str(), in_msg->identifier.c_str());
 
     // TODO:  check that the the resource is not currently in use
 
@@ -109,20 +117,57 @@ ResourceOwner::authentication_and_resource_request_cb(const macaroon_msgs::msg::
     publish_resource_and_discharge_macaroons();
 }
 
+// Create a callback function for when a command is received.
+void
+ResourceOwner::command_cb(const macaroon_msgs::msg::MacaroonCommand::SharedPtr msg)
+{
+    RCLCPP_INFO(this->get_logger(), "Received command");
+
+    // extract the command and discharge macaroons from the message
+    Macaroon M_received(msg->command_macaroon.macaroon);
+    Macaroon D_received(msg->discharge_macaroon.macaroon);
+
+    // print macaroons for debug
+    M_received.print_macaroon();
+    D_received.print_macaroon();
+
+    // create a verifier
+    MacaroonVerifier V_received = V_;
+
+    // create a vector of macaroons to hold the discharge macaroon(s)
+    std::vector<Macaroon> MS = {D_received};
+    // MS.push_back(D_received);
+
+    // perfor the verification
+    if(V_received.verify(M_received, MS))
+    {
+        RCLCPP_INFO(this->get_logger(), "Command macaroon verification: PASSED");
+    }
+    else
+    {
+        RCLCPP_INFO(this->get_logger(), "Command macaroon verification: FAILED");
+    }
+}
+
+
 void
 ResourceOwner::publish_resource_and_discharge_macaroons()
 {
     // create an output message holding resource and discharge macaroons
-    auto out_msg = std::make_unique<macaroon_msgs::msg::DischargeMacaroons>();
+    auto resource_msg = std::make_unique<macaroon_msgs::msg::ResourceMacaroon>();
+    auto discharge_msg = std::make_unique<macaroon_msgs::msg::DischargeMacaroon>();
     
     // Add serialised resource and discharge macaroons to the message
     Macaroon M_send = ResourceBase::apply_caveats();
-    out_msg->resource_macaroon.macaroon = M_send.serialise();
-    out_msg->discharge_macaroon.macaroon = D_.serialise();
+    resource_msg->resource_macaroon.macaroon = M_send.serialise();
+    discharge_msg->discharge_macaroon.macaroon = D_.serialise();
 
     // create a publisher and send the message
-    resource_and_discharge_macaroon_pub_ = this->create_publisher<macaroon_msgs::msg::DischargeMacaroons>(ResourceBase::authentication_topic_, 10);
-    resource_and_discharge_macaroon_pub_->publish(std::move(out_msg));
+    resource_macaroon_pub_ = this->create_publisher<macaroon_msgs::msg::ResourceMacaroon>(ResourceBase::authentication_topic_, 10);
+    resource_macaroon_pub_->publish(std::move(resource_msg));
+
+    discharge_macaroon_pub_ = this->create_publisher<macaroon_msgs::msg::DischargeMacaroon>(ResourceBase::authentication_topic_, 10);
+    discharge_macaroon_pub_->publish(std::move(discharge_msg));
 
     RCLCPP_INFO(this->get_logger(), "Published resource/discharge macaroon pair");
 }

@@ -1,19 +1,32 @@
 #include "resource_base.hpp"
 
 ResourceBase::ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic, 
-                           const std::string & authentication_topic)
+                           const std::string & authentication_topic, const std::string & command_topic)
 : Node(node_name)
 {
     node_name_ = node_name;
 
+    // store topic information
+    publish_topic_ = publish_topic;
+    subscribe_topic_ = subscribe_topic;
+    authentication_topic_ = authentication_topic;
+    command_topic_ = command_topic;
+
     T_ = std::make_shared<TalkerNode>(node_name + "_talker", publish_topic);
     L_ = std::make_shared<ListenerNode>(node_name + "_listener", subscribe_topic);
 
-    // create a publisher for sending authentication and resource requests
+    // initialise publisher for sending authentication and resource requests
     authentication_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonResourceRequest>(authentication_topic, 10);
+
+    // initialise publisher for sending commands to the resource owner
+    command_pub_ = this->create_publisher<macaroon_msgs::msg::MacaroonCommand>(command_topic_, 10);
     
-    resource_and_discharge_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::DischargeMacaroons>(
-        authentication_topic, 10, std::bind(&ResourceBase::resource_and_discharge_macaroons_cb, this, _1));    
+    // initialise subscribers for receiving macaroons from the owner during initial authorisation
+    resource_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::ResourceMacaroon>(
+        authentication_topic, 10, std::bind(&ResourceBase::resource_macaroon_cb, this, _1));    
+
+    discharge_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::DischargeMacaroon>(
+        authentication_topic, 10, std::bind(&ResourceBase::discharge_macaroon_cb, this, _1));  
 
     M_received_fresh_ = false;
     MS_received_fresh_ = false;
@@ -124,7 +137,6 @@ ResourceBase::receive_macaroon(void)
 }
 
 // Send a request to a resource owner to initiate TOFU
-// TODO:  Possibly move the 'resource' to a private variable?  For this PoC, we're only dealing with one resource.
 void
 ResourceBase::authentication_and_resource_request(const std::string resource)
 {
@@ -133,20 +145,45 @@ ResourceBase::authentication_and_resource_request(const std::string resource)
     TOFU_key_ = random_string(32);
     TOFU_location_ = "https://www.unused_third_party.com/";
     TOFU_identifier_ = resource;
-    TOFU_resource_ = resource;
 
     // publish the request
     auto msg = std::make_unique<macaroon_msgs::msg::MacaroonResourceRequest>();
     msg->key = TOFU_key_;
     msg->location = TOFU_location_;
     msg->identifier = TOFU_identifier_;
-    msg->resource = TOFU_resource_;
-    RCLCPP_INFO(this->get_logger(), "Publishing resource request (key: %s, location: %s, identifier: %s, resource: %s)", 
-        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str(), msg->resource.c_str());
+    RCLCPP_INFO(this->get_logger(), "Publishing resource request (key: %s, location: %s, identifier: %s)", 
+        msg->key.c_str(), msg->location.c_str(), msg->identifier.c_str());
 
     // Put the message into a queue to be processed by the middleware.
     // This call is non-blocking.
     authentication_pub_->publish(std::move(msg));
+}
+
+// Send a command macaroon on the command topic
+void
+ResourceBase::publish_command(const std::string command)
+{
+    // create a temporary macaroon and apply all the current caveats
+    Macaroon M_command = apply_caveats();
+
+    // add the command as a first party caveat
+    M_command.add_first_party_caveat(command);
+
+    // bind the discharge macaroon to the command macaroon
+    Macaroon D_bound = M_command.prepare_for_request(D_);
+
+    // create a message with teh command and discharge macaroons
+    auto msg = std::make_unique<macaroon_msgs::msg::MacaroonCommand>();
+    msg->command_macaroon.macaroon = M_command.serialise();
+    msg->discharge_macaroon.macaroon = D_bound.serialise();
+
+    // publish the message
+    RCLCPP_INFO(this->get_logger(), "Publishing command: %s", command.c_str());
+    command_pub_->publish(std::move(msg));
+
+    // print the macaroons for debug
+    M_command.print_macaroon();
+    D_bound.print_macaroon();
 }
 
 void
@@ -163,17 +200,27 @@ ResourceBase::print_discharge_macaroon()
     D_.print_macaroon();
 }
 
-// Create a callback function for when a resource and discharge macaroon are returned.
+// Create a callback function for when a resource macaroon is returned.
 void
-ResourceBase::resource_and_discharge_macaroons_cb(const macaroon_msgs::msg::DischargeMacaroons::SharedPtr msg)
+ResourceBase::resource_macaroon_cb(const macaroon_msgs::msg::ResourceMacaroon::SharedPtr msg)
 {
-    RCLCPP_INFO(this->get_logger(), "Received resource/discharge macaroon pair");
+    RCLCPP_INFO(this->get_logger(), "Received resource macaroon");
 
-    // Add serialised resource and discharge macaroons to the message
-    M_received_.deserialise(msg->resource_macaroon.macaroon);
+    // Retrieve serialised resource macaroon from the message
+    M_.deserialise(msg->resource_macaroon.macaroon);
+
+    M_.print_macaroon();
+}
+
+// Create a callback function for when a discharge macaroon is returned.
+void
+ResourceBase::discharge_macaroon_cb(const macaroon_msgs::msg::DischargeMacaroon::SharedPtr msg)
+{
+    RCLCPP_INFO(this->get_logger(), "Received discharge macaroon");
+
+    // Retrieve serialised discharge macaroon from the message
     D_.deserialise(msg->discharge_macaroon.macaroon);
 
-    M_received_.print_macaroon();
     D_.print_macaroon();
 }
 

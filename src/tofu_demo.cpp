@@ -42,13 +42,15 @@ int main(int argc, char * argv[])
     auto intermediary_topic = std::string("attenuate_macaroon");
     auto user_topic = std::string("use_macaroon");
     auto authentication_topic = std::string("authentication");
+    auto command_topic = std::string("command");
 
     // instantiate nodes and spin a few times
     std::string location = "https://www.unused.com/";
     std::string identifier = "cmd_vel";  // this is the resource owned or requested
-    auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, user_topic, authentication_topic, location, identifier);
-    auto resource_user = std::make_shared<ResourceUser>("user", user_topic, issuer_topic, authentication_topic);
+    auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, user_topic, authentication_topic, command_topic, location, identifier);
+    auto resource_user = std::make_shared<ResourceUser>("user", user_topic, issuer_topic, authentication_topic, command_topic);
 
+    // spin a bit
     for (int i = 1; i < 10; ++i)
     {
       exec.spin_node_some(resource_owner);
@@ -61,6 +63,7 @@ int main(int argc, char * argv[])
     std::string resource = "cmd_vel";
     (*resource_user).authentication_and_resource_request(resource);
     
+    // spin a bit
     for (int i = 1; i < 20; ++i)
     {
       exec.spin_node_some(resource_owner);
@@ -68,13 +71,33 @@ int main(int argc, char * argv[])
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // User:  add request to resource macaroon
+    // User -> Owner:  add request to resource macaroon, bind the discharge macaroon, and send the request
+    // NOTE:  This should fail, since we haven't added it as a valid command to the Owner yet
+    std::string command = "command = speed_up";
+    (*resource_user).publish_command(command);
 
-    // User:  bind discharge macaroon to resource macaroon
+    // spin a bit
+    for (int i = 1; i < 10; ++i)
+    {
+      exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_user);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
-    // User -> Owner:  transmit resource macaroon and bound discharge macaroon
+    // Owner:  Add the command as a valid command to the verifier
+    (*resource_owner).add_valid_command(command);
 
-    // Owner:  verify resource and discharge macaroons
+    // User -> Owner:  add request to resource macaroon, bind the discharge macaroon, and send the request
+    // NOTE:  This should pass now, since we have added it as a valid command to the Owner
+    (*resource_user).publish_command(command);
+
+    // spin a bit
+    for (int i = 1; i < 10; ++i)
+    {
+      exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_user);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
     // Owner:  extract request from resource macaroon
 

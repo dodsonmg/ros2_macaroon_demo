@@ -12,7 +12,9 @@
 #include "macaroon_msgs/msg/macaroon.hpp"
 #include "macaroon_msgs/msg/macaroons.hpp"
 #include "macaroon_msgs/msg/macaroon_resource_request.hpp"
-#include "macaroon_msgs/msg/discharge_macaroons.hpp"
+#include "macaroon_msgs/msg/resource_macaroon.hpp"
+#include "macaroon_msgs/msg/discharge_macaroon.hpp"
+#include "macaroon_msgs/msg/macaroon_command.hpp"
 
 using std::placeholders::_1;
 
@@ -20,14 +22,16 @@ using std::placeholders::_1;
 #include "macaroons/macaroons.hpp"
 
 // Create a Resource class that subclasses the generic rclcpp::Node base class.
-// The Resource class encapsulates a publisher, subscriber, Macaroon[, and CHERI token]
+// The Resource class encapsulates one or more Macaroons[, and CHERI token(s)]
 class ResourceBase : public rclcpp::Node
 {
 public:
     ResourceBase(const std::string & node_name, const std::string & publish_topic, const std::string & subscribe_topic, 
-                 const std::string & authorisation_topic);
+                 const std::string & authorisation_topic, const std::string & command_topic);
 
-    void authentication_and_resource_request(const std::string resource = "");
+    void authentication_and_resource_request(const std::string resource);
+
+    void publish_command(const std::string command);
 
     void add_first_party_caveat(const std::string first_party_caveat = "");
     void add_third_party_caveat(const std::string location, const std::string key, const std::string identifier);
@@ -43,8 +47,8 @@ protected:
     std::string random_string(std::size_t length);
     Macaroon apply_caveats(void);
 
-    // This is the Resource's "owned" Macaroon
-    // i.e., M_ dictates the access this Resource is able to exercise and delegate
+    // This is the node's "owned" Macaroon
+    // i.e., M_ dictates the access this node is able to exercise and delegate
     Macaroon M_;
 
     // This is a Discharge macaroon that allows the holder to discharge a third party caveat
@@ -53,7 +57,7 @@ protected:
     Macaroon D_;
 
     // This is the Macaroon received from the ListenerNode
-    // For resource intermediaries and users, it should be assigned to M_
+    // For intermediaries and users, it should be assigned to M_
     // For resource owners, it is separate from M_ and is verified by a MacaroonVerifier
     Macaroon M_received_;
     std::vector<Macaroon> MS_received_;
@@ -66,12 +70,14 @@ protected:
     std::string authentication_topic_;
     std::string publish_topic_;
     std::string subscribe_topic_;
+    std::string command_topic_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
 private:
 
-    void resource_and_discharge_macaroons_cb(const macaroon_msgs::msg::DischargeMacaroons::SharedPtr msg);
+    void resource_macaroon_cb(const macaroon_msgs::msg::ResourceMacaroon::SharedPtr msg);
+    void discharge_macaroon_cb(const macaroon_msgs::msg::DischargeMacaroon::SharedPtr msg);
 
     // create single threaded executor to run both the publisher and subscriber
     // within the same process
@@ -106,10 +112,12 @@ private:
     std::string TOFU_resource_;
 
     // Publishers
-    rclcpp::Publisher<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_pub_;    
+    rclcpp::Publisher<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_pub_;
+    rclcpp::Publisher<macaroon_msgs::msg::MacaroonCommand>::SharedPtr command_pub_;
 
     // // Subscribers
-    rclcpp::Subscription<macaroon_msgs::msg::DischargeMacaroons>::SharedPtr resource_and_discharge_macaroon_sub_;
+    rclcpp::Subscription<macaroon_msgs::msg::ResourceMacaroon>::SharedPtr resource_macaroon_sub_;
+    rclcpp::Subscription<macaroon_msgs::msg::DischargeMacaroon>::SharedPtr discharge_macaroon_sub_;
 
     // // Callbacks
     // void authentication_and_resource_request_cb(const macaroon_msgs::msg::MacaroonResourceRequest::SharedPtr msg) const;

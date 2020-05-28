@@ -15,7 +15,7 @@ public:
   TalkerNode(const std::string & node_name, const std::string & topic_name);
   void publish_message(std::string msg);
   void publish_macaroons_message(const std::vector<std::string> macaroons);
-  void publish_resource_access_request(const std::string key, const std::string location, const std::string identifier, const std::string resource);
+  void publish_resource_access_request(const std::string key, const std::string location, const std::string identifier);
 
 private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_;
