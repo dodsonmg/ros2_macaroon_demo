@@ -21,17 +21,12 @@ ResourceBase::ResourceBase(const std::string & node_name, const std::string & au
 
     discharge_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::DischargeMacaroon>(
         authentication_topic, 10, std::bind(&ResourceBase::discharge_macaroon_cb, this, _1));  
-
-    M_received_fresh_ = false;
-    MS_received_fresh_ = false;
 }
 
 void
 ResourceBase::run(void)
 {
-    // publish_macaroon();
-    // exec_.spin_node_some(L_);  // allow the ListenerNode callback to execute
-    // receive_macaroon();
+    /* might do something here */
 }
 
 // Initialise a discharge Macaroon.  Caveats added after.
@@ -42,100 +37,25 @@ ResourceBase::initialise_discharge_macaroon(const std::string location, const st
     D_.initialise(location, key, identifier);
 }
 
-// Add a first party caveat to the "owned" Macaroon by calling the Base class
+// Add a first party caveat to the "owned" Macaroon
 void
 ResourceBase::add_first_party_caveat(const std::string first_party_caveat)
 {
-    first_party_caveats_.push_back(first_party_caveat);
+    M_.add_first_party_caveat(first_party_caveat);
 }
 
-// Add a third party caveat to the "owned" Macaroon by calling the Base class
+// Add a third party caveat to the "owned" Macaroon
 void
 ResourceBase::add_third_party_caveat(const std::string location, const std::string key, const std::string identifier)
 {
-    ThirdPartyCaveat tpc = {location, key, identifier};
-    third_party_caveats_.push_back(tpc);
+    M_.add_third_party_caveat(location, key, identifier);
 }
-
-// Adds first and third party caveats and publishes a serialised Macaroon
-// void
-// ResourceBase::publish_macaroon(void)
-// {
-//     if(M_.initialised())
-//     {
-//         // Derive a new Macaroon from M_ and add caveats
-//         Macaroon M_send = apply_caveats();
-
-//         // publish the serialised Macaroon with caveats
-//         (*T_).publish_message(M_send.serialise());
-
-//         std::vector<std::string> macaroons;
-//         macaroons.push_back(M_send.serialise());
-//         (*T_).publish_macaroons_message(macaroons);
-//     }
-// }
-
-Macaroon
-ResourceBase::apply_caveats(void)
-{
-    if(M_.initialised())
-    {
-        // Derive a new Macaroon from M_ and add caveats
-        Macaroon M_applied = M_;
-        for(std::string fpc : first_party_caveats_)
-        {
-            M_applied.add_first_party_caveat(fpc);
-        }
-        for(ThirdPartyCaveat tpc : third_party_caveats_)
-        {
-            M_applied.add_third_party_caveat(tpc.location, tpc.key, tpc.identifier);
-        }
-
-        return M_applied;
-    }
-    
-    return NULL;
-}
-
-// void
-// ResourceBase::receive_macaroon(void)
-// {
-//     std::string msg_received = (*L_).get_message();
-//     std::vector<std::string> macaroons_msg_received = (*L_).get_macaroons_message();
-//     if (msg_received.size() > 0)
-//     {
-//         M_received_.deserialise(msg_received);
-
-//         if(M_received_.initialised())
-//         {
-//             M_received_fresh_ = true;
-//         }
-//     }
-//     if (macaroons_msg_received.size() > 0)
-//     {
-//         for(std::string macaroon : macaroons_msg_received)
-//         {
-//             MS_received_.push_back(Macaroon(macaroon));
-//         }
-
-//         MS_received_fresh_ = true;
-
-//         for(Macaroon M : MS_received_)
-//         {
-//             if(!M.initialised())
-//             {
-//                 MS_received_fresh_ = false;
-//             }
-//         }
-//     }
-// }
 
 // Send a request to a resource owner to initiate TOFU
 void
-ResourceBase::authentication_and_resource_request(const std::string resource)
+ResourceBase::publish_authentication_request(const std::string resource)
 {
-    // TODO: these should be initialised elsewhere.
-    // TODO: this should generate a key and an id.  possibly the id should just be the resource??
+    // create a key, a (unused) location, and assign the resource to the 'identifier' field
     TOFU_key_ = random_string(32);
     TOFU_location_ = "https://www.unused_third_party.com/";
     TOFU_identifier_ = resource;
@@ -157,35 +77,31 @@ ResourceBase::authentication_and_resource_request(const std::string resource)
 void
 ResourceBase::publish_command(const std::string command)
 {
-    // create a temporary macaroon and apply all the current caveats
-    Macaroon M_command = apply_caveats();
-
-    // add the command as a first party caveat
-    M_command.add_first_party_caveat(command);
+    // create a temporary macaroon and add the command as a first party caveat
+    Macaroon resource_macaroon = M_;
+    resource_macaroon.add_first_party_caveat(command);
 
     // bind the discharge macaroon to the command macaroon
-    Macaroon D_bound = M_command.prepare_for_request(D_);
+    Macaroon bound_discharge_macaroon = resource_macaroon.prepare_for_request(D_);
 
     // create a message with teh command and discharge macaroons
     auto msg = std::make_unique<macaroon_msgs::msg::MacaroonCommand>();
-    msg->command_macaroon.macaroon = M_command.serialise();
-    msg->discharge_macaroon.macaroon = D_bound.serialise();
+    msg->command_macaroon.macaroon = resource_macaroon.serialise();
+    msg->discharge_macaroon.macaroon = bound_discharge_macaroon.serialise();
 
     // publish the message
     RCLCPP_INFO(this->get_logger(), "Publishing command: %s", command.c_str());
     command_pub_->publish(std::move(msg));
 
     // print the macaroons for debug
-    M_command.print_macaroon();
-    D_bound.print_macaroon();
+    // resource_macaroon.print_macaroon();
+    // bound_discharge_macaroon.print_macaroon();
 }
 
 void
 ResourceBase::print_macaroon()
 {
-    // Derive a new Macaroon from M_ and add caveats
-    Macaroon M_applied = apply_caveats();
-    M_applied.print_macaroon();
+    M_.print_macaroon();
 }
 
 void

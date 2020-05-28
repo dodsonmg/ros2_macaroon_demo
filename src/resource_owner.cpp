@@ -73,26 +73,17 @@ ResourceOwner::add_first_party_caveat_verifier(const std::string first_party_cav
 }
 
 bool
-ResourceOwner::verify_macaroon(void)
+ResourceOwner::verify_macaroon(Macaroon resource_macaroon, std::vector<Macaroon> discharge_macaroons)
 {
-    if(ResourceBase::M_received_.initialised() && ResourceBase::M_received_fresh_)
+    // perform the verification
+    if(V_.verify(resource_macaroon, discharge_macaroons))
     {
-        if(V_.verify(ResourceBase::M_received_))
-        {
-            RCLCPP_INFO(this->get_logger(), "Verification: PASSED");
-            return true;
-        }
-        else
-        {
-            RCLCPP_INFO(this->get_logger(), "Verification: FAILED (%s)", V_.get_verifier_error().c_str());
-        }
-        ResourceBase::M_received_fresh_ = false;
+        RCLCPP_INFO(this->get_logger(), "Macaroon verification: PASSED");
+        return true;
     }
-    else
-    {
-        RCLCPP_INFO(this->get_logger(), "Verification: No received Macaroons to verify yet...");
-    }
-    
+
+    RCLCPP_INFO(this->get_logger(), "Macaroon verification: FAILED");
+
     return false;
 }
 
@@ -107,11 +98,11 @@ ResourceOwner::authentication_and_resource_request_cb(const macaroon_msgs::msg::
 
     // Create a discharge (TOFU) macaroon
     ResourceBase::initialise_discharge_macaroon(in_msg->location, in_msg->key, in_msg->identifier);
-    ResourceBase::print_discharge_macaroon();
+    // ResourceBase::print_discharge_macaroon();
 
     // Add corresponding third party caveat to the resource macaroon
     ResourceBase::add_third_party_caveat(in_msg->location, in_msg->key, in_msg->identifier);
-    ResourceBase::print_macaroon();
+    // ResourceBase::print_macaroon();
 
     publish_resource_and_discharge_macaroons();
 }
@@ -123,31 +114,18 @@ ResourceOwner::command_cb(const macaroon_msgs::msg::MacaroonCommand::SharedPtr m
     RCLCPP_INFO(this->get_logger(), "Received command");
 
     // extract the command and discharge macaroons from the message
-    Macaroon M_received(msg->command_macaroon.macaroon);
-    Macaroon D_received(msg->discharge_macaroon.macaroon);
+    Macaroon command_macaroon(msg->command_macaroon.macaroon);
+    Macaroon discharge_macaroon(msg->discharge_macaroon.macaroon);
 
     // print macaroons for debug
-    M_received.print_macaroon();
-    D_received.print_macaroon();
-
-    // create a verifier
-    MacaroonVerifier V_received = V_;
+    // command_macaroon.print_macaroon();
+    // discharge_macaroon.print_macaroon();
 
     // create a vector of macaroons to hold the discharge macaroon(s)
-    std::vector<Macaroon> MS = {D_received};
-    // MS.push_back(D_received);
-
-    // perfor the verification
-    if(V_received.verify(M_received, MS))
-    {
-        RCLCPP_INFO(this->get_logger(), "Command macaroon verification: PASSED");
-    }
-    else
-    {
-        RCLCPP_INFO(this->get_logger(), "Command macaroon verification: FAILED");
-    }
+    std::vector<Macaroon> discharge_macaroons = {discharge_macaroon};
+    
+    verify_macaroon(command_macaroon, discharge_macaroons);
 }
-
 
 void
 ResourceOwner::publish_resource_and_discharge_macaroons()
@@ -157,7 +135,7 @@ ResourceOwner::publish_resource_and_discharge_macaroons()
     auto discharge_msg = std::make_unique<macaroon_msgs::msg::DischargeMacaroon>();
     
     // Add serialised resource and discharge macaroons to the message
-    Macaroon M_send = ResourceBase::apply_caveats();
+    Macaroon M_send = ResourceBase::M_;
     resource_msg->resource_macaroon.macaroon = M_send.serialise();
     discharge_msg->discharge_macaroon.macaroon = D_.serialise();
 

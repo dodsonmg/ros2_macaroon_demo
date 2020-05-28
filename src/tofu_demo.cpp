@@ -57,7 +57,7 @@ int main(int argc, char * argv[])
     // User -> Owner:  request "access" via message (provide key and id)
     // Owner -> User:  if approved, send discharge macaroon and resource macaroon with appropriate third party caveat
     std::string resource = "cmd_vel";
-    (*resource_user).authentication_and_resource_request(resource);
+    (*resource_user).publish_authentication_request(resource);
     
     // spin a bit
     for (int i = 1; i < 20; ++i)
