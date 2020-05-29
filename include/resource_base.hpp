@@ -4,6 +4,9 @@
 // #include <chrono>
 #include <random>
 
+/* macaroons */
+#include "macaroons/macaroons.hpp"
+
 /* ROS2 */
 #include "rclcpp/rclcpp.hpp"
 #include "talker_node.hpp"
@@ -18,8 +21,7 @@
 
 using std::placeholders::_1;
 
-/* macaroons */
-#include "macaroons/macaroons.hpp"
+// using namespace macaroons;
 
 // Create a Resource class that subclasses the generic rclcpp::Node base class.
 // The Resource class encapsulates one or more Macaroons[, and CHERI token(s)]
@@ -28,14 +30,14 @@ class ResourceBase : public rclcpp::Node
 public:
     ResourceBase(const std::string & node_name, const std::string & authorisation_topic, const std::string & command_topic);
 
-    void publish_authentication_request(const std::string resource);
+    void publish_authentication_request(const std::string & resource);
 
-    void publish_command(const std::string command);
+    void publish_command(const std::string & command);
 
-    void add_first_party_caveat(const std::string first_party_caveat = "");
-    void add_third_party_caveat(const std::string location, const std::string key, const std::string identifier);
+    void add_first_party_caveat(const std::string & first_party_caveat = "");
+    void add_third_party_caveat(const std::string & location, const std::string & key, const std::string & identifier);
 
-    void initialise_discharge_macaroon(const std::string location, const std::string key, const std::string identifier);
+    void initialise_discharge_macaroon(const std::string & location, const std::string & key, const std::string & identifier);
 
 protected:
     void run(void);
@@ -45,12 +47,12 @@ protected:
 
     // This macaroon is the token held by the node.
     // The node might own the resource, be using the resource, or simply be an intermediary delegating the resource
-    Macaroon M_;
+    macaroons::Macaroon M_;
 
     // This is a Discharge macaroon that allows the holder to discharge a third party caveat
     // TODO:  Generalise to some kind of dict, so we can use the 'identifier' in the third party caveat
     // to find the correct discharge macaroon.  In this case, we'll assume just one.
-    Macaroon D_;
+    macaroons::Macaroon D_;
 
     // pub/sub topics
     std::string authentication_topic_;

@@ -32,28 +32,28 @@ ResourceBase::run(void)
 // Initialise a discharge Macaroon.  Caveats added after.
 // This function could be used by an owner, intermediary (e.g., third party) or user
 void
-ResourceBase::initialise_discharge_macaroon(const std::string location, const std::string key, const std::string identifier)
+ResourceBase::initialise_discharge_macaroon(const std::string & location, const std::string & key, const std::string & identifier)
 {
-    D_.initialise(location, key, identifier);
+    D_ = macaroons::Macaroon(location, key, identifier);
 }
 
 // Add a first party caveat to the "owned" Macaroon
 void
-ResourceBase::add_first_party_caveat(const std::string first_party_caveat)
+ResourceBase::add_first_party_caveat(const std::string & first_party_caveat)
 {
-    M_.add_first_party_caveat(first_party_caveat);
+    M_ = M_.add_first_party_caveat(first_party_caveat);
 }
 
 // Add a third party caveat to the "owned" Macaroon
 void
-ResourceBase::add_third_party_caveat(const std::string location, const std::string key, const std::string identifier)
+ResourceBase::add_third_party_caveat(const std::string & location, const std::string & key, const std::string & identifier)
 {
-    M_.add_third_party_caveat(location, key, identifier);
+    M_ = M_.add_third_party_caveat(location, key, identifier);
 }
 
 // Send a request to a resource owner to initiate TOFU
 void
-ResourceBase::publish_authentication_request(const std::string resource)
+ResourceBase::publish_authentication_request(const std::string & resource)
 {
     // create a key, a (unused) location, and assign the resource to the 'identifier' field
     TOFU_key_ = random_string(32);
@@ -75,19 +75,19 @@ ResourceBase::publish_authentication_request(const std::string resource)
 
 // Send a command macaroon on the command topic
 void
-ResourceBase::publish_command(const std::string command)
+ResourceBase::publish_command(const std::string & command)
 {
     // create a temporary macaroon and add the command as a first party caveat
-    Macaroon resource_macaroon = M_;
-    resource_macaroon.add_first_party_caveat(command);
+    macaroons::Macaroon resource_macaroon = M_;
+    resource_macaroon = resource_macaroon.add_first_party_caveat(command);
 
     // bind the discharge macaroon to the command macaroon
-    Macaroon bound_discharge_macaroon = resource_macaroon.prepare_for_request(D_);
+    macaroons::Macaroon bound_discharge_macaroon = resource_macaroon.prepare_for_request(D_);
 
     // create a message with teh command and discharge macaroons
     auto msg = std::make_unique<macaroon_msgs::msg::MacaroonCommand>();
-    msg->command_macaroon.macaroon = resource_macaroon.serialise();
-    msg->discharge_macaroon.macaroon = bound_discharge_macaroon.serialise();
+    msg->command_macaroon.macaroon = resource_macaroon.serialize();
+    msg->discharge_macaroon.macaroon = bound_discharge_macaroon.serialize();
 
     // publish the message
     RCLCPP_INFO(this->get_logger(), "Publishing command: %s", command.c_str());
@@ -101,13 +101,13 @@ ResourceBase::publish_command(const std::string command)
 void
 ResourceBase::print_macaroon()
 {
-    M_.print_macaroon();
+    std::cout << M_.inspect() << std::endl;
 }
 
 void
 ResourceBase::print_discharge_macaroon()
 {
-    D_.print_macaroon();
+    std::cout << D_.inspect() << std::endl;
 }
 
 // Create a callback function for when a resource macaroon is returned.
@@ -116,10 +116,10 @@ ResourceBase::resource_macaroon_cb(const macaroon_msgs::msg::ResourceMacaroon::S
 {
     RCLCPP_INFO(this->get_logger(), "Received resource macaroon");
 
-    // Retrieve serialised resource macaroon from the message
-    M_.deserialise(msg->resource_macaroon.macaroon);
+    // Retrieve serialized resource macaroon from the message
+    M_ = macaroons::Macaroon::deserialize(msg->resource_macaroon.macaroon);
 
-    M_.print_macaroon();
+    print_macaroon();
 }
 
 // Create a callback function for when a discharge macaroon is returned.
@@ -128,10 +128,10 @@ ResourceBase::discharge_macaroon_cb(const macaroon_msgs::msg::DischargeMacaroon:
 {
     RCLCPP_INFO(this->get_logger(), "Received discharge macaroon");
 
-    // Retrieve serialised discharge macaroon from the message
-    D_.deserialise(msg->discharge_macaroon.macaroon);
+    // Retrieve serialized discharge macaroon from the message
+    D_ = macaroons::Macaroon::deserialize(msg->discharge_macaroon.macaroon);
 
-    D_.print_macaroon();
+    print_discharge_macaroon();
 }
 
 /*

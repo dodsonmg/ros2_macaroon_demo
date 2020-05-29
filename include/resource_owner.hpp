@@ -29,10 +29,10 @@ public:
 
 private:
     void run(void);
-    bool verify_macaroon(Macaroon resource_macaroon, std::vector<Macaroon> discharge_macaroons);
+    bool verify_macaroon(macaroons::Macaroon resource_macaroon, std::vector<macaroons::Macaroon> discharge_macaroons);
     void publish_resource_and_discharge_macaroons(void);
 
-    MacaroonVerifier V_;
+    macaroons::Verifier V_;
 
     // Macaroon base properties
     std::string key_;

@@ -10,7 +10,6 @@ ResourceOwner::ResourceOwner(const std::string & node_name, const std::string & 
     identifier_ = identifier;
     location_ = location;
     initialise_macaroon();
-    initialise_verifier();
 
     // initialise the authentication subscriber
     authentication_sub_ = this->create_subscription<macaroon_msgs::msg::MacaroonResourceRequest>(
@@ -34,15 +33,7 @@ void
 ResourceOwner::initialise_macaroon(void)
 {
     key_ = ResourceBase::random_string(32);
-    ResourceBase::M_.initialise(location_, key_, identifier_);
-}
-
-// Initialise the MacaroonVerifier.  Caveats added after.
-// This function is only used by the Macaroon owner, who has the key
-void
-ResourceOwner::initialise_verifier()
-{
-    V_.initialise(key_);
+    ResourceBase::M_ = macaroons::Macaroon(location_, key_, identifier_);
 }
 
 // Add a first party caveat to the "owned" Macaroon by calling the Base class
@@ -66,20 +57,24 @@ ResourceOwner::add_valid_command(const std::string command)
 void
 ResourceOwner::add_first_party_caveat_verifier(const std::string first_party_caveat)
 {
-    if(V_.initialised() && first_party_caveat.size() > 0)
-    {
-        V_.satisfy_exact(first_party_caveat);
-    }    
+    V_.satisfy_exact(first_party_caveat); 
 }
 
 bool
-ResourceOwner::verify_macaroon(Macaroon resource_macaroon, std::vector<Macaroon> discharge_macaroons)
+ResourceOwner::verify_macaroon(macaroons::Macaroon resource_macaroon, std::vector<macaroons::Macaroon> discharge_macaroons)
 {
-    // perform the verification
-    if(V_.verify(resource_macaroon, discharge_macaroons))
-    {
-        RCLCPP_INFO(this->get_logger(), "Macaroon verification: PASSED");
-        return true;
+    // test the verification
+    try {
+        V_.verify(resource_macaroon, key_, discharge_macaroons);
+
+        if(V_.verify_unsafe(resource_macaroon, key_, discharge_macaroons))
+        {
+            RCLCPP_INFO(this->get_logger(), "Macaroon verification: PASSED");
+            return true;
+        }        
+    }
+    catch (macaroons::exception::NotAuthorized &e) {
+        std::cout << e.what() << std::endl;
     }
 
     RCLCPP_INFO(this->get_logger(), "Macaroon verification: FAILED");
@@ -114,15 +109,15 @@ ResourceOwner::command_cb(const macaroon_msgs::msg::MacaroonCommand::SharedPtr m
     RCLCPP_INFO(this->get_logger(), "Received command");
 
     // extract the command and discharge macaroons from the message
-    Macaroon command_macaroon(msg->command_macaroon.macaroon);
-    Macaroon discharge_macaroon(msg->discharge_macaroon.macaroon);
+    macaroons::Macaroon command_macaroon(macaroons::Macaroon::deserialize(msg->command_macaroon.macaroon));
+    macaroons::Macaroon discharge_macaroon(macaroons::Macaroon::deserialize(msg->discharge_macaroon.macaroon));
 
     // print macaroons for debug
     // command_macaroon.print_macaroon();
     // discharge_macaroon.print_macaroon();
 
     // create a vector of macaroons to hold the discharge macaroon(s)
-    std::vector<Macaroon> discharge_macaroons = {discharge_macaroon};
+    std::vector<macaroons::Macaroon> discharge_macaroons = {discharge_macaroon};
     
     verify_macaroon(command_macaroon, discharge_macaroons);
 }
@@ -134,10 +129,10 @@ ResourceOwner::publish_resource_and_discharge_macaroons()
     auto resource_msg = std::make_unique<macaroon_msgs::msg::ResourceMacaroon>();
     auto discharge_msg = std::make_unique<macaroon_msgs::msg::DischargeMacaroon>();
     
-    // Add serialised resource and discharge macaroons to the message
-    Macaroon M_send = ResourceBase::M_;
-    resource_msg->resource_macaroon.macaroon = M_send.serialise();
-    discharge_msg->discharge_macaroon.macaroon = D_.serialise();
+    // Add serialized resource and discharge macaroons to the message
+    macaroons::Macaroon M_send = ResourceBase::M_;
+    resource_msg->resource_macaroon.macaroon = M_send.serialize();
+    discharge_msg->discharge_macaroon.macaroon = D_.serialize();
 
     // create a publisher and send the message
     resource_macaroon_pub_ = this->create_publisher<macaroon_msgs::msg::ResourceMacaroon>(ResourceBase::authentication_topic_, 10);
