@@ -92,10 +92,6 @@ ResourceBase::publish_command(const std::string & command)
     // publish the message
     RCLCPP_INFO(this->get_logger(), "Publishing command: %s", command.c_str());
     command_pub_->publish(std::move(msg));
-
-    // print the macaroons for debug
-    // resource_macaroon.print_macaroon();
-    // bound_discharge_macaroon.print_macaroon();
 }
 
 void
@@ -118,8 +114,6 @@ ResourceBase::resource_macaroon_cb(const macaroon_msgs::msg::ResourceMacaroon::S
 
     // Retrieve serialized resource macaroon from the message
     M_ = macaroons::Macaroon::deserialize(msg->resource_macaroon.macaroon);
-
-    print_macaroon();
 }
 
 // Create a callback function for when a discharge macaroon is returned.
@@ -130,8 +124,24 @@ ResourceBase::discharge_macaroon_cb(const macaroon_msgs::msg::DischargeMacaroon:
 
     // Retrieve serialized discharge macaroon from the message
     D_ = macaroons::Macaroon::deserialize(msg->discharge_macaroon.macaroon);
+}
 
-    print_discharge_macaroon();
+// used to split the output from Macaroon::inspect(), where "\n" is placed between caveats
+std::vector<std::string>
+ResourceBase::split_string(const std::string & input, const std::string & delimiter)
+{
+    std::vector<std::string> output;
+    std::string::size_type last = 0;
+    std::string::size_type next = 0;
+
+    while ((next = input.find(delimiter, last)) != std::string::npos) {
+        output.push_back(input.substr(last, next-last));
+        last = next + 1;
+    }
+
+    output.push_back(input.substr(last, next-last));
+
+    return output;
 }
 
 /*

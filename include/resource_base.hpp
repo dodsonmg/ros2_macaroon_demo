@@ -21,8 +21,6 @@
 
 using std::placeholders::_1;
 
-// using namespace macaroons;
-
 // Create a Resource class that subclasses the generic rclcpp::Node base class.
 // The Resource class encapsulates one or more Macaroons[, and CHERI token(s)]
 class ResourceBase : public rclcpp::Node
@@ -43,6 +41,7 @@ protected:
     void run(void);
     void print_macaroon(void);
     void print_discharge_macaroon(void);
+    std::vector<std::string> split_string(const std::string & input, const std::string & delimiter);
     std::string random_string(std::size_t length);
 
     // This macaroon is the token held by the node.
@@ -50,8 +49,6 @@ protected:
     macaroons::Macaroon M_;
 
     // This is a Discharge macaroon that allows the holder to discharge a third party caveat
-    // TODO:  Generalise to some kind of dict, so we can use the 'identifier' in the third party caveat
-    // to find the correct discharge macaroon.  In this case, we'll assume just one.
     macaroons::Macaroon D_;
 
     // pub/sub topics
@@ -61,7 +58,6 @@ protected:
     rclcpp::TimerBase::SharedPtr timer_;
 
 private:
-
     // create single threaded executor to run both the publisher and subscriber
     // within the same process
     rclcpp::executors::SingleThreadedExecutor exec_;

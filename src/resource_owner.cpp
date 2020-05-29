@@ -93,11 +93,9 @@ ResourceOwner::authentication_and_resource_request_cb(const macaroon_msgs::msg::
 
     // Create a discharge (TOFU) macaroon
     ResourceBase::initialise_discharge_macaroon(in_msg->location, in_msg->key, in_msg->identifier);
-    // ResourceBase::print_discharge_macaroon();
 
     // Add corresponding third party caveat to the resource macaroon
     ResourceBase::add_third_party_caveat(in_msg->location, in_msg->key, in_msg->identifier);
-    // ResourceBase::print_macaroon();
 
     publish_resource_and_discharge_macaroons();
 }
@@ -112,14 +110,28 @@ ResourceOwner::command_cb(const macaroon_msgs::msg::MacaroonCommand::SharedPtr m
     macaroons::Macaroon command_macaroon(macaroons::Macaroon::deserialize(msg->command_macaroon.macaroon));
     macaroons::Macaroon discharge_macaroon(macaroons::Macaroon::deserialize(msg->discharge_macaroon.macaroon));
 
-    // print macaroons for debug
-    // command_macaroon.print_macaroon();
-    // discharge_macaroon.print_macaroon();
-
     // create a vector of macaroons to hold the discharge macaroon(s)
     std::vector<macaroons::Macaroon> discharge_macaroons = {discharge_macaroon};
     
-    verify_macaroon(command_macaroon, discharge_macaroons);
+    if(verify_macaroon(command_macaroon, discharge_macaroons)) {
+        std::string command = extract_macaroon_command(command_macaroon);
+        RCLCPP_INFO(this->get_logger(), "Received command: %s", command.c_str());
+    }
+}
+
+// extracts a command from the command macaroon
+// ASSUME:  there is only one command.  we should probably check for this...
+std::string
+ResourceOwner::extract_macaroon_command(macaroons::Macaroon command_macaroon)
+{
+    std::vector<std::string> caveats = ResourceBase::split_string(command_macaroon.inspect(), "\n");
+    for (std::string s : caveats) {
+        if(s.find("command =") != std::string::npos) {
+            // the caveat will be something like "cid command = [command]"
+            return s.substr(s.find("=") + 2);
+        }
+    }
+    return "";
 }
 
 void

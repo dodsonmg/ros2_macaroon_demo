@@ -31,6 +31,7 @@ private:
     void run(void);
     bool verify_macaroon(macaroons::Macaroon resource_macaroon, std::vector<macaroons::Macaroon> discharge_macaroons);
     void publish_resource_and_discharge_macaroons(void);
+    std::string extract_macaroon_command(macaroons::Macaroon command_macaroon);
 
     macaroons::Verifier V_;
 
