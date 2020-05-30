@@ -1,16 +1,6 @@
 #ifndef RESOURCE_USER_HPP
 #define RESOURCE_USER_HPP
 
-// #include <chrono>
-
-/* ROS2 */
-#include "rclcpp/rclcpp.hpp"
-#include "talker_node.hpp"
-#include "listener_node.hpp"
-
-/* macaroons */
-#include "macaroons/macaroons.hpp"
-
 #include "resource_base.hpp"
 
 // Create a Resource class that subclasses the generic rclcpp::Node base class.
@@ -18,12 +8,16 @@
 class ResourceUser : public ResourceBase
 {
 public:
-    ResourceUser(const std::string & node_name, const std::string & authentication_topic, const std::string & command_topic);
+    ResourceUser(const std::string & authentication_topic, const std::string & command_topic,
+                 const std::string & resource);
 
-    void add_first_party_caveat(const std::string first_party_caveat = "");
+    void publish_authentication_request(void);
+    void publish_command(const std::string & command);
 
 private:
-    void run(void);
+    // Publishers
+    rclcpp::Publisher<macaroon_msgs::msg::ResourceRequest>::SharedPtr authentication_pub_;
+    rclcpp::Publisher<macaroon_msgs::msg::MacaroonCommand>::SharedPtr command_pub_;
 };
 
 #endif // RESOURCE_USER_HPP

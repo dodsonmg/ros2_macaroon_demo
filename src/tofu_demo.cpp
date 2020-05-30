@@ -4,12 +4,8 @@
 #include <string>
 #include <utility>
 
-#include "talker_node.hpp"
-#include "listener_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rcutils/cmdline_parser.h"
-
-#include "std_msgs/msg/string.hpp"
 
 /* macaroons */
 #include "macaroons/macaroons.hpp"
@@ -22,11 +18,6 @@ using namespace std::chrono_literals;
 
 int main(int argc, char * argv[])
 {
-    // Force flush of the stdout buffer.
-    // This ensures a correct sync of all prints
-    // even when executed simultaneously within the launch file.
-    setvbuf(stdout, NULL, _IONBF, BUFSIZ);
-
     // Initialize any global resources needed by the middleware and the client library.
     // You must call this before using any other part of the ROS system.
     // This should be called once per process.
@@ -41,10 +32,9 @@ int main(int argc, char * argv[])
     auto command_topic = std::string("command");
 
     // instantiate nodes and spin a few times
-    std::string location = "https://www.unused.com/";
-    std::string identifier = "cmd_vel";  // this is the resource owned or requested
-    auto resource_owner = std::make_shared<ResourceOwner>("owner", authentication_topic, command_topic, location, identifier);
-    auto resource_user = std::make_shared<ResourceUser>("user", authentication_topic, command_topic);
+    std::string resource = "cmd_vel";  // this is the resource owned or requested
+    auto resource_owner = std::make_shared<ResourceOwner>(authentication_topic, command_topic, resource);
+    auto resource_user = std::make_shared<ResourceUser>(authentication_topic, command_topic, resource);
 
     // spin a bit
     for (int i = 1; i < 10; ++i)
@@ -56,8 +46,7 @@ int main(int argc, char * argv[])
 
     // User -> Owner:  request "access" via message (provide key and id)
     // Owner -> User:  if approved, send discharge macaroon and resource macaroon with appropriate third party caveat
-    std::string resource = "cmd_vel";
-    (*resource_user).publish_authentication_request(resource);
+    (*resource_user).publish_authentication_request();
     
     // spin a bit
     for (int i = 1; i < 20; ++i)

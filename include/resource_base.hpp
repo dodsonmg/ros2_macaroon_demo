@@ -9,15 +9,11 @@
 
 /* ROS2 */
 #include "rclcpp/rclcpp.hpp"
-#include "talker_node.hpp"
-#include "listener_node.hpp"
-#include "std_msgs/msg/string.hpp"
 #include "macaroon_msgs/msg/macaroon.hpp"
-#include "macaroon_msgs/msg/macaroons.hpp"
-#include "macaroon_msgs/msg/macaroon_resource_request.hpp"
 #include "macaroon_msgs/msg/resource_macaroon.hpp"
 #include "macaroon_msgs/msg/discharge_macaroon.hpp"
 #include "macaroon_msgs/msg/macaroon_command.hpp"
+#include "macaroon_msgs/msg/resource_request.hpp"
 
 using std::placeholders::_1;
 
@@ -26,54 +22,42 @@ using std::placeholders::_1;
 class ResourceBase : public rclcpp::Node
 {
 public:
-    ResourceBase(const std::string & node_name, const std::string & authorisation_topic, const std::string & command_topic);
+    ResourceBase(const std::string & authentication_topic, const std::string & command_topic, const std::string & node_name);
 
-    void publish_authentication_request(const std::string & resource);
-
-    void publish_command(const std::string & command);
-
-    void add_first_party_caveat(const std::string & first_party_caveat = "");
+    void add_first_party_caveat(const std::string & first_party_caveat);
     void add_third_party_caveat(const std::string & location, const std::string & key, const std::string & identifier);
-
-    void initialise_discharge_macaroon(const std::string & location, const std::string & key, const std::string & identifier);
 
 protected:
     void run(void);
-    void print_macaroon(void);
+
+    void initialise_discharge_macaroon(void);
+    void print_resource_macaroon(void);
     void print_discharge_macaroon(void);
     std::vector<std::string> split_string(const std::string & input, const std::string & delimiter);
-    std::string random_string(std::size_t length);
+    std::string generate_key(std::size_t length);
+
+    // Hold the name of the resource
+    std::string resource_;
 
     // This macaroon is the token held by the node.
-    // The node might own the resource, be using the resource, or simply be an intermediary delegating the resource
-    macaroons::Macaroon M_;
+    macaroons::Macaroon resource_macaroon;
 
     // This is a Discharge macaroon that allows the holder to discharge a third party caveat
-    macaroons::Macaroon D_;
+    macaroons::Macaroon discharge_macaroon;
 
-    // pub/sub topics
+    // pub/sub topic names
     std::string authentication_topic_;
     std::string command_topic_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
 private:
-    // create single threaded executor to run both the publisher and subscriber
-    // within the same process
-    rclcpp::executors::SingleThreadedExecutor exec_;
-
-    // hold the name of the ROS node encapsulated by this class
-    // TODO:  It may be appropriate to encapsulate multiple nodes eventually...
+    // hold the node name.  might not need this...
     std::string node_name_;
 
-    // used for third party caveats as part of TOFU
-    std::string TOFU_key_;
-    std::string TOFU_location_;
-    std::string TOFU_identifier_;
-
-    // Publishers
-    rclcpp::Publisher<macaroon_msgs::msg::MacaroonResourceRequest>::SharedPtr authentication_pub_;
-    rclcpp::Publisher<macaroon_msgs::msg::MacaroonCommand>::SharedPtr command_pub_;
+    // initial properties of the discharge caveat
+    std::string discharge_key_;
+    std::string discharge_location_;
 
     // // Subscribers
     rclcpp::Subscription<macaroon_msgs::msg::ResourceMacaroon>::SharedPtr resource_macaroon_sub_;

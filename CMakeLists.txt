@@ -28,8 +28,6 @@ find_package(libmacaroons REQUIRED)
 
 # add_executable(macaroon_demo
 #               src/macaroon_demo.cpp
-#               src/talker_node.cpp
-#               src/listener_node.cpp
 #               src/resource_base.cpp
 #               src/resource_owner.cpp
 #               src/resource_user.cpp)
@@ -44,8 +42,6 @@ find_package(libmacaroons REQUIRED)
 
 add_executable(tofu_demo
   src/tofu_demo.cpp
-  src/talker_node.cpp
-  src/listener_node.cpp
   src/resource_base.cpp
   src/resource_owner.cpp
   src/resource_user.cpp)
