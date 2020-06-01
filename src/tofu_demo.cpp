@@ -28,13 +28,14 @@ int main(int argc, char * argv[])
     rclcpp::executors::SingleThreadedExecutor exec;
 
     // Establish the topics for authentication and command
+    auto tofu_topic = std::string("tofu");
     auto authentication_topic = std::string("authentication");
-    auto command_topic = std::string("command");
+    auto resource_topic = std::string("resource");
 
     // instantiate nodes and spin a few times
-    std::string resource = "cmd_vel";  // this is the resource owned or requested
-    auto resource_owner = std::make_shared<ResourceOwner>(authentication_topic, command_topic, resource);
-    auto resource_user = std::make_shared<ResourceUser>(authentication_topic, command_topic, resource);
+    std::string resource_name = "cmd_vel";  // this is the resource owned or requested
+    auto resource_owner = std::make_shared<ResourceOwner>(tofu_topic, authentication_topic, resource_topic, resource_name, resource_name + "_owner");
+    auto resource_user = std::make_shared<ResourceUser>(tofu_topic, authentication_topic, resource_topic, resource_name, resource_name + "_user");
 
     // spin a bit
     for (int i = 1; i < 10; ++i)
@@ -44,22 +45,56 @@ int main(int argc, char * argv[])
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // User -> Owner:  request "access" via message (provide key and id)
-    // Owner -> User:  if approved, send discharge macaroon and resource macaroon with appropriate third party caveat
-    (*resource_user).publish_authentication_request();
-    
+    /**
+     * User -> Owner:  initiate TOFU (request a key for a discharge macaroon)
+     * Owner -> User:  if approved, send the key and add a third party caveat to the resource macaroon
+     * */
+    (*resource_user).initiate_tofu();
+
     // spin a bit
-    for (int i = 1; i < 20; ++i)
+    for (int i = 1; i < 10; ++i)
     {
       exec.spin_node_some(resource_owner);
       exec.spin_node_some(resource_user);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // User -> Owner:  add request to resource macaroon, bind the discharge macaroon, and send the request
-    // NOTE:  This should fail, since we haven't added it as a valid command to the Owner yet
+    /**
+     * User -> Owner:  initiate authentication (request a discharge macaroon)
+     * Owner -> User:  if approved, send a serialised discharge macaroon
+     *
+     * Unnecessary in the two party example
+     * */
+    // (*resource_user).initiate_authorisation();
+
+    // // spin a bit
+    // for (int i = 1; i < 20; ++i)
+    // {
+    //   exec.spin_node_some(resource_owner);
+    //   exec.spin_node_some(resource_user);
+    //   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // }
+
+    /**
+     * User -> Owner:  request a resource macaroon
+     * Owner -> User:  send a serialised, resource macaroon
+     * */
+    (*resource_user).request_resource_token();
+
+    // spin a bit
+    for (int i = 1; i < 10; ++i)
+    {
+      exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_user);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    /**
+     * User -> Owner:  add request to resource macaroon, bind the discharge macaroon, and send the request
+     * NOTE:  This should fail, since we haven't added it as a valid command to the Owner yet
+     * */
     std::string command = "command = speed_up";
-    (*resource_user).publish_command(command);
+    (*resource_user).transmit_command(command);
 
     // spin a bit
     for (int i = 1; i < 10; ++i)
@@ -69,12 +104,13 @@ int main(int argc, char * argv[])
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Owner:  Add the command as a valid command to the verifier
-    (*resource_owner).add_valid_command(command);
-
-    // User -> Owner:  add request to resource macaroon, bind the discharge macaroon, and send the request
-    // NOTE:  This should pass now, since we have added it as a valid command to the Owner
-    (*resource_user).publish_command(command);
+    /**
+     * Owner:  Add the command as a valid command to the verifier
+     * User -> Owner:  add request to resource macaroon, bind the discharge macaroon, and send the request
+     * NOTE:  This should pass now, since we have added it as a valid command to the Owner
+     * */
+    (*resource_owner).add_valid_command_verifier(command);
+    (*resource_user).transmit_command(command);
 
     // spin a bit
     for (int i = 1; i < 10; ++i)
@@ -83,11 +119,6 @@ int main(int argc, char * argv[])
       exec.spin_node_some(resource_user);
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-
-    // Owner:  extract request from resource macaroon (this is part of the callback...)
-
-
-
 
     // // Create a resource owner
     // // auto resource_owner = std::make_shared<ResourceOwner>("owner", issuer_topic, issuer_topic, authentication_topic);
@@ -134,7 +165,7 @@ int main(int argc, char * argv[])
     //   // {
     //   //   std::cout << std::endl << "<<< Adding MacaroonVerifier caveat to Owner >>> " << std::endl;
     //   //   (*resource_owner).add_first_party_caveat_verifier(fpc_1);
-    //   // }      
+    //   // }
 
     //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

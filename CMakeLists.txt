@@ -42,7 +42,6 @@ find_package(libmacaroons REQUIRED)
 
 add_executable(tofu_demo
   src/tofu_demo.cpp
-  src/resource_base.cpp
   src/resource_owner.cpp
   src/resource_user.cpp)
 target_include_directories(tofu_demo PRIVATE

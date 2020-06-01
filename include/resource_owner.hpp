@@ -1,49 +1,40 @@
 #ifndef RESOURCE_OWNER_HPP
 #define RESOURCE_OWNER_HPP
 
-#include "resource_base.hpp"
+#include "resource_user.hpp"
 
 // Create a Resource class that subclasses the generic rclcpp::Node base class.
 // The Resource class encapsulates a publisher, subscriber, Macaroon[, and CHERI token]
-class ResourceOwner : public ResourceBase
+class ResourceOwner : public ResourceUser
 {
 public:
-    ResourceOwner(const std::string & authentication_topic, const std::string & command_topic,
-                  const std::string resource);
+    ResourceOwner(const std::string & tofu_topic, const std::string & authentication_topic,
+        const std::string & resource_topic, const std::string & resource_name, const std::string & node_name);
 
-    void initialise_verifier(void);
+    // public macaroon interactions
     void add_first_party_caveat(const std::string & first_party_caveat);
-    void add_valid_command(const std::string & command);
-    void add_first_party_caveat_verifier(const std::string & first_party_caveat);
+    void add_valid_command_verifier(const std::string & command);
 
 private:
-    void run(void);
+    // initialisation
+    void initialise_publishers(void);
+    void initialise_subscribers(void);
 
+    // private macaroon interactions
     void initialise_resource_macaroon(void);
-
+    void initialise_verifier(void);
+    void add_first_party_caveat_verifier(const std::string & first_party_caveat);
     bool verify_macaroon(macaroons::Macaroon resource_macaroon, std::vector<macaroons::Macaroon> discharge_macaroons);
-    void publish_resource_and_discharge_macaroons(void);
     std::string extract_macaroon_command(macaroons::Macaroon command_macaroon);
 
+    // only the resource owner can create a verifier (because only the owner has the key)
     macaroons::Verifier V_;
 
-    // initial properties of the resource caveat
-    std::string key_;
-    std::string location_;
-
-    bool resource_in_use_;
-
-    // Publishers
-    rclcpp::Publisher<macaroon_msgs::msg::ResourceMacaroon>::SharedPtr resource_macaroon_pub_;
-    rclcpp::Publisher<macaroon_msgs::msg::DischargeMacaroon>::SharedPtr discharge_macaroon_pub_;
-
-    // Subscribers
-    rclcpp::Subscription<macaroon_msgs::msg::ResourceRequest>::SharedPtr authentication_sub_;
-    rclcpp::Subscription<macaroon_msgs::msg::MacaroonCommand>::SharedPtr command_sub_;
-
-    // Callbacks
-    void authentication_and_resource_request_cb(const macaroon_msgs::msg::ResourceRequest::SharedPtr msg);
-    void command_cb(const macaroon_msgs::msg::MacaroonCommand::SharedPtr msg);    
+    // callbacks
+    void tofu_request_cb(const macaroon_msgs::msg::TofuRequest::SharedPtr msg);                         // respond to tofu request with a discharge macaroon key or a rejection
+    void authentication_request_cb(const macaroon_msgs::msg::AuthenticationRequest::SharedPtr msg);     // respond to an authentication request with a discharge macaroon or a rejection
+    void resource_token_request_cb(const macaroon_msgs::msg::ResourceTokenRequest::SharedPtr msg);      // respond to a request for a resource token with a resource macaroon or a rejection
+    void command_cb(const macaroon_msgs::msg::CommandMacaroon::SharedPtr msg);                          // respond to a command macaroon (a caveated resource macaroon and a bound discharge macaroon), deserialise them, validate them, extract the command, and act or reject
 };
 
 #endif // RESOURCE_OWNER_HPP
