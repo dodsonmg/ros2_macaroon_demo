@@ -12,36 +12,16 @@ ResourceUser::ResourceUser(const std::string & tofu_topic, const std::string & a
     authentication_topic_ = authentication_topic;
     resource_topic_ = resource_topic;
 
-    initialise_publishers();
-    initialise_subscribers();
+    initialise_clients();
 }
 
 void
-ResourceUser::initialise_publishers(void)
+ResourceUser::initialise_clients(void)
 {
-    tofu_request_pub_ = this->create_publisher<macaroon_msgs::msg::TofuRequest>(tofu_topic_, 10);
-    authentication_request_pub_ = this->create_publisher<macaroon_msgs::msg::AuthenticationRequest>(authentication_topic_, 10);
-    resource_token_request_pub_ = this->create_publisher<macaroon_msgs::msg::ResourceTokenRequest>(resource_topic_, 10);
-    command_pub_ = this->create_publisher<macaroon_msgs::msg::CommandMacaroon>(resource_topic_, 10);
-}
-
-void
-ResourceUser::initialise_subscribers(void)
-{
-    tofu_response_sub_ = this->create_subscription<macaroon_msgs::msg::TofuResponse>(
-        tofu_topic_, 10, std::bind(&ResourceUser::tofu_response_cb, this, _1));
-
-    discharge_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::DischargeMacaroon>(
-        authentication_topic_, 10, std::bind(&ResourceUser::discharge_macaroon_cb, this, _1));
-
-    resource_macaroon_sub_ = this->create_subscription<macaroon_msgs::msg::ResourceMacaroon>(
-        resource_topic_, 10, std::bind(&ResourceUser::resource_macaroon_cb, this, _1));
-}
-
-void
-ResourceUser::run(void)
-{
-    /* might do something here. called by exec during a spin(). */
+    tofu_client_ = this->create_client<macaroon_msgs::srv::InitiateTofu>(tofu_topic_);
+    authentication_client_ = this->create_client<macaroon_msgs::srv::Authenticate>(authentication_topic_);
+    get_resource_token_client_ = this->create_client<macaroon_msgs::srv::GetResourceToken>(resource_topic_);
+    use_resource_token_client_ = this->create_client<macaroon_msgs::srv::UseResourceToken>(resource_topic_);
 }
 
 // Initialise a discharge macaroon.  Caveats added after.
@@ -78,64 +58,167 @@ ResourceUser::print_discharge_macaroon()
     std::cout << discharge_macaroon_.inspect() << std::endl;
 }
 
-/*
-Send a request on the tofu topic to obtain a key to create discharge macaroons
-
-In a two party scenario, this is user->owner
-In a three part scenario, this is third-party->owner
+/**
+ * Initiate TOFU service
+ *
+ * Request: resource name
+ * Response: key for a discharge macaroon
+ *
+ * In a two party scenario, this is user->owner
+ * In a three part scenario, this is third-party->owner
 */
 void
 ResourceUser::initiate_tofu(void)
 {
     // publish the request
-    auto msg = std::make_unique<macaroon_msgs::msg::TofuRequest>();
+    auto request = std::make_shared<macaroon_msgs::srv::InitiateTofu::Request>();
+    request->tofu_request = resource_name_;
 
-    msg->tofu_request = resource_name_;
     RCLCPP_INFO(this->get_logger(), "Initiating TOFU (request: %s)",
-        msg->tofu_request.c_str());
+        request->tofu_request.c_str());
 
-    tofu_request_pub_->publish(std::move(msg));
+    // wait for service to be available
+    while (!tofu_client_->wait_for_service(1s)) {
+    if (!rclcpp::ok()) {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        discharge_macaroon_key_ = "";
+        return;
+    }
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+    }
+
+    // send the request
+    auto result = tofu_client_->async_send_request(request, std::bind(&ResourceUser::initiate_tofu_cb, this, _1));
 }
 
-/*
-Send a request on the authentication topic for a given resource
-*/
+/**
+ * TOFU service callback
+ *
+ * If TOFU was accepted, response is a key for a discharge macaroon.  Otherwise, empty string.
+ * */
+void
+ResourceUser::initiate_tofu_cb(rclcpp::Client<macaroon_msgs::srv::InitiateTofu>::SharedFuture response)
+{
+    if(response.get()->key.size() > 0) {
+        RCLCPP_INFO(this->get_logger(), "Received a TOFU response (key: %s)", response.get()->key.c_str());
+
+        // Retrieve serialized resource macaroon from the message
+        discharge_macaroon_key_ = response.get()->key;
+
+        // initialise and store the discharge macaroon
+        initialise_discharge_macaroon();
+    } else {
+        RCLCPP_INFO(this->get_logger(), "TOFU response failed");
+        discharge_macaroon_key_ = "";
+    }
+}
+
+/**
+ * Initiate Authentication service
+ *
+ * Request: resource name and principal name
+ * Response: serialised discharge macaroon
+ * */
 void
 ResourceUser::initiate_authentication(void)
 {
     // publish the request
-    auto msg = std::make_unique<macaroon_msgs::msg::AuthenticationRequest>();
+    auto request = std::make_shared<macaroon_msgs::srv::Authenticate::Request>();
 
-    msg->principal_name = resource_name_ + "_user";
-    msg->resource_name = resource_name_;
+    request->principal_name = resource_name_ + "_user";
+    request->resource_name = resource_name_;
     RCLCPP_INFO(this->get_logger(), "Initiating authentication (principal name: %s // resource name: %s)",
-        msg->principal_name.c_str(), msg->resource_name.c_str());
+        request->principal_name.c_str(), request->resource_name.c_str());
 
-    authentication_request_pub_->publish(std::move(msg));
+    // wait for service to be available
+    while (!authentication_client_->wait_for_service(1s)) {
+    if (!rclcpp::ok()) {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        discharge_macaroon_key_ = "";
+        return;
+    }
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+    }
+
+    // send the request
+    auto result = authentication_client_->async_send_request(request, std::bind(&ResourceUser::initiate_authentication_cb, this, _1));
 }
 
-/*
-Send a request on the resource topic for the token of a given resource
-*/
+
+/**
+ * Authentication service callback
+ *
+ * If authentication was accepted, response is a serialised discharge macaroon.  Otherwise, empty string.
+ * */
 void
-ResourceUser::request_resource_token(void)
+ResourceUser::initiate_authentication_cb(rclcpp::Client<macaroon_msgs::srv::Authenticate>::SharedFuture response)
+{
+    if(response.get()->discharge_macaroon.macaroon.size() > 0) {
+        RCLCPP_INFO(this->get_logger(), "Received discharge macaroon");
+
+        // Retrieve serialized resource macaroon from the message
+        discharge_macaroon_ = macaroons::Macaroon::deserialize(response.get()->discharge_macaroon.macaroon);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Failed to receive a discharge macaroon");
+    }
+}
+
+/**
+ * Initiate GetResourceToken service
+ *
+ * Request: resource name
+ * Response: serialised resource macaroon
+ * */
+void
+ResourceUser::get_resource_token(void)
 {
     // publish the request
-    auto msg = std::make_unique<macaroon_msgs::msg::ResourceTokenRequest>();
+    auto request = std::make_shared<macaroon_msgs::srv::GetResourceToken::Request>();
 
-    msg->resource_name = resource_name_;
+    request->resource_name = resource_name_;
     RCLCPP_INFO(this->get_logger(), "Requesting resource token (resource: %s)",
-        msg->resource_name.c_str());
+        request->resource_name.c_str());
 
-    resource_token_request_pub_->publish(std::move(msg));
+    // wait for service to be available
+    while (!get_resource_token_client_->wait_for_service(1s)) {
+    if (!rclcpp::ok()) {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        discharge_macaroon_key_ = "";
+        return;
+    }
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
+    }
+
+    // send the request
+    auto result = get_resource_token_client_->async_send_request(request, std::bind(&ResourceUser::get_resource_token_cb, this, _1));
 }
 
-/*
-Caveat the resource macaroon with a command, bind the discharge macaroon
-serialise them both and send them to the resource owner
-*/
+/**
+ * GetResourceToken service callback
+ *
+ * If request was accepted, response is a serialised resource macaroon.  Otherwise, empty string.
+ * */
 void
-ResourceUser::transmit_command(const std::string & command)
+ResourceUser::get_resource_token_cb(rclcpp::Client<macaroon_msgs::srv::GetResourceToken>::SharedFuture response)
+{
+    if(response.get()->resource_macaroon.macaroon.size() > 0) {
+        RCLCPP_INFO(this->get_logger(), "Received resource macaroon");
+
+        // Retrieve serialized resource macaroon from the message
+        resource_macaroon_ = macaroons::Macaroon::deserialize(response.get()->resource_macaroon.macaroon);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Failed to receive a resource macaroon");
+    }
+}
+
+/**
+ * Initiate UseResourceToken service
+ *
+ * Request: resource macaroon caveated with a command, bound discharge macaroon
+ * Response: successful execution
+ * */
+void
+ResourceUser::use_resource_token(const std::string & command)
 {
     // create a temporary macaroon and add the command as a first party caveat
     macaroons::Macaroon command_macaroon = resource_macaroon_;
@@ -144,71 +227,40 @@ ResourceUser::transmit_command(const std::string & command)
     // bind the discharge macaroon to the command macaroon
     macaroons::Macaroon bound_discharge_macaroon = command_macaroon.prepare_for_request(discharge_macaroon_);
 
-    // create a message with teh command and discharge macaroons
-    auto msg = std::make_unique<macaroon_msgs::msg::CommandMacaroon>();
-    msg->command_macaroon.macaroon = command_macaroon.serialize();
-    msg->discharge_macaroon.macaroon = bound_discharge_macaroon.serialize();
+    // create a message with the command and discharge macaroons
+    auto request = std::make_shared<macaroon_msgs::srv::UseResourceToken::Request>();
+    request->command_macaroon.macaroon = command_macaroon.serialize();
+    request->discharge_macaroon.macaroon = bound_discharge_macaroon.serialize();
 
     // publish the message
     RCLCPP_INFO(this->get_logger(), "Publishing command: %s", command.c_str());
-    command_pub_->publish(std::move(msg));
-}
 
-/*
-Callback for receiving a tofu response message
-
-Store the received key and create a discharge macaroon
-*/
-void
-ResourceUser::tofu_response_cb(const macaroon_msgs::msg::TofuResponse::SharedPtr msg)
-{
-    if(msg->key.size() > 0) {
-        RCLCPP_INFO(this->get_logger(), "Received a TOFU response (key: %s)", msg->key.c_str());
-
-        // Retrieve serialized resource macaroon from the message
-        discharge_macaroon_key_ = msg->key;
-
-        // initialise and store the discharge macaroon
-        initialise_discharge_macaroon();
-    } else {
-        RCLCPP_INFO(this->get_logger(), "TOFU response failed");
+    // wait for service to be available
+    while (!use_resource_token_client_->wait_for_service(1s)) {
+    if (!rclcpp::ok()) {
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
+        discharge_macaroon_key_ = "";
+        return;
+    }
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "service not available, waiting again...");
     }
 
+    // send the request
+    auto result = use_resource_token_client_->async_send_request(request, std::bind(&ResourceUser::use_resource_token_cb, this, _1));
 }
 
-/*
-Callback for receiving a resource macaroon message
-
-Deserialise and store the resource macaroon
-*/
+/**
+ * UseResourceToken service callback
+ *
+ * If command was executed, response is true, else false.
+ * */
 void
-ResourceUser::resource_macaroon_cb(const macaroon_msgs::msg::ResourceMacaroon::SharedPtr msg)
+ResourceUser::use_resource_token_cb(rclcpp::Client<macaroon_msgs::srv::UseResourceToken>::SharedFuture response)
 {
-    if(msg->resource_macaroon.macaroon.size() > 0) {
-        RCLCPP_INFO(this->get_logger(), "Received resource macaroon");
-
-        // Retrieve serialized resource macaroon from the message
-        resource_macaroon_ = macaroons::Macaroon::deserialize(msg->resource_macaroon.macaroon);
+    if(response.get()->execution_success) {
+        RCLCPP_INFO(this->get_logger(), "Command executed successfully.");
     } else {
-        RCLCPP_INFO(this->get_logger(), "Failed to receive a resource macaroon");
-    }
-}
-
-/*
-Callback for receiving a discharge macaroon message
-
-Deserialise and store the discharge macaroon
-*/
-void
-ResourceUser::discharge_macaroon_cb(const macaroon_msgs::msg::DischargeMacaroon::SharedPtr msg)
-{
-    if(msg->discharge_macaroon.macaroon.size() > 0) {
-        RCLCPP_INFO(this->get_logger(), "Received discharge macaroon");
-
-        // Retrieve serialized resource macaroon from the message
-        discharge_macaroon_ = macaroons::Macaroon::deserialize(msg->discharge_macaroon.macaroon);
-    } else {
-        RCLCPP_INFO(this->get_logger(), "Failed to receive a discharge macaroon");
+        RCLCPP_INFO(this->get_logger(), "Command failed to execute.");
     }
 }
 

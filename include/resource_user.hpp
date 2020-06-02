@@ -1,7 +1,7 @@
 #ifndef RESOURCE_USER_HPP
 #define RESOURCE_USER_HPP
 
-// #include <chrono>
+#include <chrono>
 #include <random>
 
 /* macaroons */
@@ -16,8 +16,14 @@
 #include "macaroon_msgs/msg/resource_token_request.hpp"
 #include "macaroon_msgs/msg/resource_macaroon.hpp"
 #include "macaroon_msgs/msg/command_macaroon.hpp"
+#include "macaroon_msgs/srv/initiate_tofu.hpp"
+#include "macaroon_msgs/srv/authenticate.hpp"
+#include "macaroon_msgs/srv/get_resource_token.hpp"
+#include "macaroon_msgs/srv/use_resource_token.hpp"
 
 using std::placeholders::_1;
+using std::placeholders::_2;
+using namespace std::chrono_literals;
 
 // Create a Resource class that subclasses the generic rclcpp::Node base class.
 // The Resource class encapsulates one or more Macaroons[, and CHERI token(s)]
@@ -30,19 +36,18 @@ public:
     // interactions between owner and user
     void initiate_tofu(void);
     void initiate_authentication(void);
-    void request_resource_token(void);
-    void transmit_command(const std::string & command);
+    void get_resource_token(void);
+    void use_resource_token(const std::string & command);
 
     // macaroon interactions
     void add_first_party_caveat(const std::string & first_party_caveat);
     void add_third_party_caveat(const std::string & location, const std::string & key, const std::string & identifier);
 
 protected:
-    void run(void);
-
     // initialisation
     void initialise_publishers(void);
     void initialise_subscribers(void);
+    void initialise_clients(void);
 
     // macaroon interactions
     void initialise_resource_macaroon(void);
@@ -73,32 +78,24 @@ protected:
     std::string authentication_topic_;
     std::string resource_topic_;
 
-    // publishers and subscribers (nominally in the order they would be used)
-    rclcpp::Publisher<macaroon_msgs::msg::TofuRequest>::SharedPtr tofu_request_pub_;        // publish a request for a discharge macaroon key (assume this is a TOFU interaction)
-    rclcpp::Subscription<macaroon_msgs::msg::TofuRequest>::SharedPtr tofu_request_sub_;     // receive...
+    // service servers and clients
+    rclcpp::Service<macaroon_msgs::srv::InitiateTofu>::SharedPtr tofu_server_;
+    rclcpp::Client<macaroon_msgs::srv::InitiateTofu>::SharedPtr tofu_client_;
 
-    rclcpp::Publisher<macaroon_msgs::msg::TofuResponse>::SharedPtr tofu_response_pub_;      // publish a a discharge macaroon key (assume this is a TOFU interaction)
-    rclcpp::Subscription<macaroon_msgs::msg::TofuResponse>::SharedPtr tofu_response_sub_;   // receive...
+    rclcpp::Service<macaroon_msgs::srv::Authenticate>::SharedPtr authentication_server_;
+    rclcpp::Client<macaroon_msgs::srv::Authenticate>::SharedPtr authentication_client_;
 
-    rclcpp::Publisher<macaroon_msgs::msg::AuthenticationRequest>::SharedPtr authentication_request_pub_;      // publish an authentication request
-    rclcpp::Subscription<macaroon_msgs::msg::AuthenticationRequest>::SharedPtr authentication_request_sub_;   // receive...
+    rclcpp::Service<macaroon_msgs::srv::GetResourceToken>::SharedPtr get_resource_token_server_;
+    rclcpp::Client<macaroon_msgs::srv::GetResourceToken>::SharedPtr get_resource_token_client_;
 
-    rclcpp::Publisher<macaroon_msgs::msg::DischargeMacaroon>::SharedPtr discharge_macaroon_pub_;        // publish a serialised discharge macaroon (in response to an authentication request)
-    rclcpp::Subscription<macaroon_msgs::msg::DischargeMacaroon>::SharedPtr discharge_macaroon_sub_;     // receive...
-
-    rclcpp::Publisher<macaroon_msgs::msg::ResourceTokenRequest>::SharedPtr resource_token_request_pub_;      // publish a request for a resource token
-    rclcpp::Subscription<macaroon_msgs::msg::ResourceTokenRequest>::SharedPtr resource_token_request_sub_;   // receive...
-
-    rclcpp::Publisher<macaroon_msgs::msg::ResourceMacaroon>::SharedPtr resource_macaroon_pub_;      // publish a serialised resource macaroon (in response to a resource token request)
-    rclcpp::Subscription<macaroon_msgs::msg::ResourceMacaroon>::SharedPtr resource_macaroon_sub_;   // receive...
-
-    rclcpp::Publisher<macaroon_msgs::msg::CommandMacaroon>::SharedPtr command_pub_;     // publish a command (a serialised, caveated resource macaroon and a serialised, bound discharge macaroon)
-    rclcpp::Subscription<macaroon_msgs::msg::CommandMacaroon>::SharedPtr command_sub_;  // receive...
+    rclcpp::Service<macaroon_msgs::srv::UseResourceToken>::SharedPtr use_resource_token_server_;
+    rclcpp::Client<macaroon_msgs::srv::UseResourceToken>::SharedPtr use_resource_token_client_;
 
     // callbacks
-    void tofu_response_cb(const macaroon_msgs::msg::TofuResponse::SharedPtr msg);                       // receive a tofu response by storing a key (later used to create a discharge macaroon)
-    void discharge_macaroon_cb(const macaroon_msgs::msg::DischargeMacaroon::SharedPtr msg);             // receive a discharge macaroon, deserialise it, and store it
-    void resource_macaroon_cb(const macaroon_msgs::msg::ResourceMacaroon::SharedPtr msg);               // receive a resource macaroon, deserialise it, and store it
+    void initiate_tofu_cb(rclcpp::Client<macaroon_msgs::srv::InitiateTofu>::SharedFuture response);
+    void initiate_authentication_cb(rclcpp::Client<macaroon_msgs::srv::Authenticate>::SharedFuture response);
+    void get_resource_token_cb(rclcpp::Client<macaroon_msgs::srv::GetResourceToken>::SharedFuture response);
+    void use_resource_token_cb(rclcpp::Client<macaroon_msgs::srv::UseResourceToken>::SharedFuture response);
 };
 
 #endif // RESOURCE_USER_HPP

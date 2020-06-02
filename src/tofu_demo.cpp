@@ -63,23 +63,23 @@ int main(int argc, char * argv[])
      * User -> Owner:  initiate authentication (request a discharge macaroon)
      * Owner -> User:  if approved, send a serialised discharge macaroon
      *
-     * Unnecessary in the two party example
+     * Unnecessary in the two party example, but we'll do it anyway for testing
      * */
-    // (*resource_user).initiate_authorisation();
+    (*resource_user).initiate_authentication();
 
-    // // spin a bit
-    // for (int i = 1; i < 20; ++i)
-    // {
-    //   exec.spin_node_some(resource_owner);
-    //   exec.spin_node_some(resource_user);
-    //   std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    // }
+    // spin a bit
+    for (int i = 1; i < 20; ++i)
+    {
+      exec.spin_node_some(resource_owner);
+      exec.spin_node_some(resource_user);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
     /**
      * User -> Owner:  request a resource macaroon
      * Owner -> User:  send a serialised, resource macaroon
      * */
-    (*resource_user).request_resource_token();
+    (*resource_user).get_resource_token();
 
     // spin a bit
     for (int i = 1; i < 10; ++i)
@@ -94,7 +94,7 @@ int main(int argc, char * argv[])
      * NOTE:  This should fail, since we haven't added it as a valid command to the Owner yet
      * */
     std::string command = "command = speed_up";
-    (*resource_user).transmit_command(command);
+    (*resource_user).use_resource_token(command);
 
     // spin a bit
     for (int i = 1; i < 10; ++i)
@@ -110,7 +110,7 @@ int main(int argc, char * argv[])
      * NOTE:  This should pass now, since we have added it as a valid command to the Owner
      * */
     (*resource_owner).add_valid_command_verifier(command);
-    (*resource_user).transmit_command(command);
+    (*resource_user).use_resource_token(command);
 
     // spin a bit
     for (int i = 1; i < 10; ++i)

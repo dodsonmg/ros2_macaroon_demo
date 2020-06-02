@@ -7,32 +7,20 @@ ResourceOwner::ResourceOwner(const std::string & tofu_topic, const std::string &
     // initialise the resource macaroon
     initialise_resource_macaroon();
 
-    initialise_publishers();
-    initialise_subscribers();
+    initialise_servers();
 }
 
 void
-ResourceOwner::initialise_publishers(void)
+ResourceOwner::initialise_servers(void)
 {
-    tofu_response_pub_ = this->create_publisher<macaroon_msgs::msg::TofuResponse>(tofu_topic_, 10);
-    discharge_macaroon_pub_ = this->create_publisher<macaroon_msgs::msg::DischargeMacaroon>(authentication_topic_, 10);
-    resource_macaroon_pub_ = this->create_publisher<macaroon_msgs::msg::ResourceMacaroon>(resource_topic_, 10);
-}
-
-void
-ResourceOwner::initialise_subscribers(void)
-{
-    tofu_request_sub_ = this->create_subscription<macaroon_msgs::msg::TofuRequest>(
-        tofu_topic_, 10, std::bind(&ResourceOwner::tofu_request_cb, this, _1));
-
-    authentication_request_sub_ = this->create_subscription<macaroon_msgs::msg::AuthenticationRequest>(
-        authentication_topic_, 10, std::bind(&ResourceOwner::authentication_request_cb, this, _1));
-
-    resource_token_request_sub_ = this->create_subscription<macaroon_msgs::msg::ResourceTokenRequest>(
-        resource_topic_, 10, std::bind(&ResourceOwner::resource_token_request_cb, this, _1));
-
-    command_sub_ = this->create_subscription<macaroon_msgs::msg::CommandMacaroon>(
-        resource_topic_, 10, std::bind(&ResourceOwner::command_cb, this, _1));
+    tofu_server_ = this->create_service<macaroon_msgs::srv::InitiateTofu>(tofu_topic_,
+        std::bind(&ResourceOwner::tofu_service, this, _1, _2));
+    authentication_server_ = this->create_service<macaroon_msgs::srv::Authenticate>(authentication_topic_,
+        std::bind(&ResourceOwner::authentication_service, this, _1, _2));
+    get_resource_token_server_ = this->create_service<macaroon_msgs::srv::GetResourceToken>(resource_topic_,
+        std::bind(&ResourceOwner::get_resource_token_service, this, _1, _2));
+    use_resource_token_server_ = this->create_service<macaroon_msgs::srv::UseResourceToken>(resource_topic_,
+        std::bind(&ResourceOwner::use_resource_token_service, this, _1, _2));
 }
 
 /**
@@ -100,21 +88,21 @@ ResourceOwner::verify_macaroon(macaroons::Macaroon resource_macaroon, std::vecto
 }
 
 /**
- * Callback for receiving a TOFU request
+ * TOFU Service
  *
- * Response is either to transmit a key for use in a discharge macaroon or reject the request (empty string)
-*/
+ * Receives a request to initiate TOFU and responds with a key (for a discharge macaroon)
+ * or a rejection (empty string)
+ * */
 void
-ResourceOwner::tofu_request_cb(const macaroon_msgs::msg::TofuRequest::SharedPtr msg)
+ResourceOwner::tofu_service(const std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Request> request,
+    std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Response> response)
 {
-    auto tofu_response_msg = std::make_unique<macaroon_msgs::msg::TofuResponse>();
-
     // check that the TOFU resource is the resource owned by this node
     // if so, respond with a key, otherwise an empty string
-    if(msg->tofu_request == resource_name_) {
-        RCLCPP_INFO(this->get_logger(), "Valid TOFU request received (resource: %s).", msg->tofu_request.c_str());
+    if(request->tofu_request == resource_name_) {
+        RCLCPP_INFO(this->get_logger(), "Valid TOFU request received (resource: %s).", request->tofu_request.c_str());
         discharge_macaroon_key_ = generate_key(32);
-        tofu_response_msg->key = discharge_macaroon_key_;
+        response->key = discharge_macaroon_key_;
 
         // initialise the associated discharge macaroon
         initialise_discharge_macaroon();
@@ -122,76 +110,71 @@ ResourceOwner::tofu_request_cb(const macaroon_msgs::msg::TofuRequest::SharedPtr 
         // Add corresponding third party caveat to the resource macaroon
         add_third_party_caveat("", discharge_macaroon_key_, resource_name_);
     } else {
-        tofu_response_msg->key = "";
-        RCLCPP_INFO(this->get_logger(), "TOFU request failed.  %s is an unknown resource.", msg->tofu_request.c_str());
+        response->key = "";
+        RCLCPP_INFO(this->get_logger(), "TOFU request failed.  %s is an unknown resource.", request->tofu_request.c_str());
     }
-
-    tofu_response_pub_->publish(std::move(tofu_response_msg));
 }
 
 /**
- * Callback for receiving an authentication request
+ * Authentication service
  *
- * Response is either to transmit a serialised discharge macaroon or reject the request (empty string)
+ * Receives an authentication request.
+ * Responds with either a serialised discharge macaroon or rejection (empty string)
  */
 void
-ResourceOwner::authentication_request_cb(const macaroon_msgs::msg::AuthenticationRequest::SharedPtr msg)
+ResourceOwner::authentication_service(const std::shared_ptr<macaroon_msgs::srv::Authenticate::Request> request,
+    std::shared_ptr<macaroon_msgs::srv::Authenticate::Response> response)
 {
-    auto discharge_macaroon_msg = std::make_unique<macaroon_msgs::msg::DischargeMacaroon>();
-
     // if the resource and principal are valid, respond with a serialised discharge macaroon
-    if(msg->resource_name != resource_name_) {
-        RCLCPP_INFO(this->get_logger(), "Authentication failed.  %s is an unknown resource.", msg->resource_name.c_str());
-        discharge_macaroon_msg->discharge_macaroon.macaroon = "";
-    } else if(msg->principal_name != resource_name_ + "_user") {
-        RCLCPP_INFO(this->get_logger(), "Authentication failed.  %s is an unknown principal.", msg->principal_name.c_str());
-        discharge_macaroon_msg->discharge_macaroon.macaroon = "";
+    if(request->resource_name != resource_name_) {
+        RCLCPP_INFO(this->get_logger(), "Authentication failed.  %s is an unknown resource.", request->resource_name.c_str());
+        response->discharge_macaroon.macaroon = "";
+    } else if(request->principal_name != resource_name_ + "_user") {
+        RCLCPP_INFO(this->get_logger(), "Authentication failed.  %s is an unknown principal.", request->principal_name.c_str());
+        response->discharge_macaroon.macaroon = "";
     } else {
         RCLCPP_INFO(this->get_logger(), "Valid authentication request (resource: %s // principal: %s)",
-            msg->resource_name.c_str(), msg->principal_name.c_str());
+            request->resource_name.c_str(), request->principal_name.c_str());
         // serialise the discharge macaroon and add it to the message
-        discharge_macaroon_msg->discharge_macaroon.macaroon = discharge_macaroon_.serialize();
+        response->discharge_macaroon.macaroon = discharge_macaroon_.serialize();
     }
-
-    // send the discharge macaroon (or empty string)
-    discharge_macaroon_pub_->publish(std::move(discharge_macaroon_msg));
 }
 
 /**
- * Callback for receiving a resource token request
+ * GetResourceToken service
  *
- * Response is either to transmit a serialised resource macaroon or reject the request (empty string)
+ * Receives an resource request.
+ * Responds with either a serialised resource macaroon or rejection (empty string)
  */
 void
-ResourceOwner::resource_token_request_cb(const macaroon_msgs::msg::ResourceTokenRequest::SharedPtr msg)
+ResourceOwner::get_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Request> request,
+    std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Response> response)
 {
-    auto resource_macaroon_msg = std::make_unique<macaroon_msgs::msg::ResourceMacaroon>();
-
     // if the resource and principal are valid, respond with a serialised discharge macaroon
-    if(msg->resource_name != resource_name_) {
-        RCLCPP_INFO(this->get_logger(), "Resource token request failed.  %s is an unknown resource.", msg->resource_name.c_str());
-        resource_macaroon_msg->resource_macaroon.macaroon = "";
+    if(request->resource_name != resource_name_) {
+        RCLCPP_INFO(this->get_logger(), "Resource token request failed.  %s is an unknown resource.", request->resource_name.c_str());
+        response->resource_macaroon.macaroon = "";
     } else {
-        RCLCPP_INFO(this->get_logger(), "Valid resource token request received (resource: %s).", msg->resource_name.c_str());
-        // serialise the resource macaroon and add it to the message
-        resource_macaroon_msg->resource_macaroon.macaroon = resource_macaroon_.serialize();
+        RCLCPP_INFO(this->get_logger(), "Valid resource token request received (resource: %s)",
+            request->resource_name.c_str());
+        // serialise the discharge macaroon and add it to the message
+        response->resource_macaroon.macaroon = resource_macaroon_.serialize();
     }
-
-    // send the discharge macaroon (or empty string)
-    resource_macaroon_pub_->publish(std::move(resource_macaroon_msg));
 }
 
-/*
- * Callback for receiving a command macaroon (caveated resource macaroon and bound discharge macaroon, both serialised)
+/**
+ * UseResourceToken service
  *
- * Extract, deserialise, and verify the command macaroon (with discharge macaroons).  If verified, extract (and execute) the command.
+ * Receives a command macaroon (caveated resource macaroon and bound discharge macaroon, both serialised)
+ * Responds with true if the command is valid and executed correctly, false otherwise
  */
 void
-ResourceOwner::command_cb(const macaroon_msgs::msg::CommandMacaroon::SharedPtr msg)
+ResourceOwner::use_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Request> request,
+    std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Response> response)
 {
     // extract the command and discharge macaroons from the message
-    macaroons::Macaroon command_macaroon(macaroons::Macaroon::deserialize(msg->command_macaroon.macaroon));
-    macaroons::Macaroon bound_discharge_macaroon(macaroons::Macaroon::deserialize(msg->discharge_macaroon.macaroon));
+    macaroons::Macaroon command_macaroon(macaroons::Macaroon::deserialize(request->command_macaroon.macaroon));
+    macaroons::Macaroon bound_discharge_macaroon(macaroons::Macaroon::deserialize(request->discharge_macaroon.macaroon));
 
     // create a vector of macaroons to hold the discharge macaroon(s)
     std::vector<macaroons::Macaroon> discharge_macaroons = {bound_discharge_macaroon};
@@ -201,8 +184,13 @@ ResourceOwner::command_cb(const macaroon_msgs::msg::CommandMacaroon::SharedPtr m
     if(verify_macaroon(command_macaroon, discharge_macaroons)) {
         std::string command = extract_macaroon_command(command_macaroon);
 
-        // perform some check that the command is acceptable
+        /* perform some check that the command is acceptable */
+
         RCLCPP_INFO(this->get_logger(), "Received valid command (command: %s).", command.c_str());
+        response->execution_success = true;
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Received invalid command macaroon.");
+        response->execution_success = false;
     }
 }
 

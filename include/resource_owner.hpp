@@ -19,6 +19,7 @@ private:
     // initialisation
     void initialise_publishers(void);
     void initialise_subscribers(void);
+    void initialise_servers(void);
 
     // private macaroon interactions
     void initialise_resource_macaroon(void);
@@ -30,11 +31,15 @@ private:
     // only the resource owner can create a verifier (because only the owner has the key)
     macaroons::Verifier V_;
 
-    // callbacks
-    void tofu_request_cb(const macaroon_msgs::msg::TofuRequest::SharedPtr msg);                         // respond to tofu request with a discharge macaroon key or a rejection
-    void authentication_request_cb(const macaroon_msgs::msg::AuthenticationRequest::SharedPtr msg);     // respond to an authentication request with a discharge macaroon or a rejection
-    void resource_token_request_cb(const macaroon_msgs::msg::ResourceTokenRequest::SharedPtr msg);      // respond to a request for a resource token with a resource macaroon or a rejection
-    void command_cb(const macaroon_msgs::msg::CommandMacaroon::SharedPtr msg);                          // respond to a command macaroon (a caveated resource macaroon and a bound discharge macaroon), deserialise them, validate them, extract the command, and act or reject
+    // services
+    void tofu_service(const std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Request> request,
+        std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Response> response);
+    void authentication_service(const std::shared_ptr<macaroon_msgs::srv::Authenticate::Request> request,
+        std::shared_ptr<macaroon_msgs::srv::Authenticate::Response> response);
+    void get_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Request> request,
+        std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Response> response);
+    void use_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Request> request,
+        std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Response> response);
 };
 
 #endif // RESOURCE_OWNER_HPP
