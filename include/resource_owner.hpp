@@ -9,16 +9,18 @@ class ResourceOwner : public ResourceUser
 {
 public:
     ResourceOwner(const std::string & tofu_topic, const std::string & authentication_topic,
-        const std::string & resource_topic, const std::string & resource_name, const std::string & node_name);
+    const std::string & get_resource_topic, const std::string & use_resource_topic, const std::string & resource_name,
+    const std::string & node_name, const bool two_party);
 
     // public macaroon interactions
     void add_first_party_caveat(const std::string & first_party_caveat);
     void add_valid_command_verifier(const std::string & command);
 
 private:
+    // true if this is a two-party interaction and the ResourceOwner is performing TOFU directly with the ResourceUser
+    bool two_party_;
+
     // initialisation
-    void initialise_publishers(void);
-    void initialise_subscribers(void);
     void initialise_servers(void);
 
     // private macaroon interactions
@@ -34,10 +36,10 @@ private:
     // services
     void tofu_service(const std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Request> request,
         std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Response> response);
-    void authentication_service(const std::shared_ptr<macaroon_msgs::srv::Authenticate::Request> request,
-        std::shared_ptr<macaroon_msgs::srv::Authenticate::Response> response);
-    void get_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Request> request,
-        std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Response> response);
+    // void authentication_service(const std::shared_ptr<macaroon_msgs::srv::Authenticate::Request> request,
+    //     std::shared_ptr<macaroon_msgs::srv::Authenticate::Response> response);
+    // void get_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Request> request,
+    //     std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Response> response);
     void use_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Request> request,
         std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Response> response);
 };

@@ -31,7 +31,8 @@ class ResourceUser : public rclcpp::Node
 {
 public:
     ResourceUser(const std::string & tofu_topic, const std::string & authentication_topic,
-        const std::string & resource_topic, const std::string & resource_name, const std::string & node_name);
+    const std::string & get_resource_topic, const std::string & use_resource_topic, const std::string & resource_name,
+    const std::string & node_name);
 
     // interactions between owner and user
     void initiate_tofu(void);
@@ -76,7 +77,8 @@ protected:
     // pub/sub topic names
     std::string tofu_topic_;
     std::string authentication_topic_;
-    std::string resource_topic_;
+    std::string get_resource_topic_;
+    std::string use_resource_topic_;
 
     // service servers and clients
     rclcpp::Service<macaroon_msgs::srv::InitiateTofu>::SharedPtr tofu_server_;
