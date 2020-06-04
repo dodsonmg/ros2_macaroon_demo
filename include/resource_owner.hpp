@@ -36,10 +36,6 @@ private:
     // services
     void tofu_service(const std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Request> request,
         std::shared_ptr<macaroon_msgs::srv::InitiateTofu::Response> response);
-    // void authentication_service(const std::shared_ptr<macaroon_msgs::srv::Authenticate::Request> request,
-    //     std::shared_ptr<macaroon_msgs::srv::Authenticate::Response> response);
-    // void get_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Request> request,
-    //     std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Response> response);
     void use_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Request> request,
         std::shared_ptr<macaroon_msgs::srv::UseResourceToken::Response> response);
 };

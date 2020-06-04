@@ -15,35 +15,12 @@ ResourceOwner::ResourceOwner(const std::string & tofu_topic, const std::string &
 
 /**
  * Initialise servers run by this ResourceOwner
- *
- * All resource owners will have some communication on the resource_topic
- *
- * In a two-party scenario:
- * - ResourceUser performs TOFU with a ResourceOwner and obtains the resource macaroon and a key for a discharge macaroon
- * - ResourceUser provides the command token to the ResourceOwner
- *
- * In a three-party scenario:
- * - ResourceAuthenticator performs TOFU with a ResourceOwner and obtains the resource macaroon and a key for a discharge macaroon
- * - ResourceUser requests a resource token from the ResourceAuthenticator
- *   (a bit contrived, but if this had been delegated multiple times, the ResourceUser would have the resource macaroon before authenticating with the third-party)
- * - ResourceUser performs authentication with the ResourceAuthenticator and obtains a discharge macaroon
- * - ResourceUser provides a command token to the ResourceOwner
  * */
 void
 ResourceOwner::initialise_servers(void)
 {
     tofu_server_ = this->create_service<macaroon_msgs::srv::InitiateTofu>(tofu_topic_,
         std::bind(&ResourceOwner::tofu_service, this, _1, _2));
-
-    // the ResourceAuthenticator performs authentication with the ResourceUser in the three party scenario
-    // (the authentication service is really unnecessary in the two-party scenario since it's done by TOFU)
-    // if(two_party_) {
-    //     authentication_server_ = this->create_service<macaroon_msgs::srv::Authenticate>(authentication_topic_,
-    //         std::bind(&ResourceOwner::authentication_service, this, _1, _2));
-    // }
-
-    // get_resource_token_server_ = this->create_service<macaroon_msgs::srv::GetResourceToken>(get_resource_topic_,
-    //     std::bind(&ResourceOwner::get_resource_token_service, this, _1, _2));
 
     use_resource_token_server_ = this->create_service<macaroon_msgs::srv::UseResourceToken>(use_resource_topic_,
         std::bind(&ResourceOwner::use_resource_token_service, this, _1, _2));
@@ -150,53 +127,6 @@ ResourceOwner::tofu_service(const std::shared_ptr<macaroon_msgs::srv::InitiateTo
         RCLCPP_INFO(this->get_logger(), "> resource:\t%s is unknown.", request->tofu_request.c_str());
     }
 }
-
-/**
- * Authentication service
- *
- * Receives an authentication request.
- * Responds with either a serialised discharge macaroon or rejection (empty string)
- */
-// void
-// ResourceOwner::authentication_service(const std::shared_ptr<macaroon_msgs::srv::Authenticate::Request> request,
-//     std::shared_ptr<macaroon_msgs::srv::Authenticate::Response> response)
-// {
-//     // if the resource and principal are valid, respond with a serialised discharge macaroon
-//     if(request->resource_name != resource_name_) {
-//         RCLCPP_INFO(this->get_logger(), "Authentication failed.  %s is an unknown resource.", request->resource_name.c_str());
-//         response->discharge_macaroon.macaroon = "";
-//     } else if(request->principal_name != resource_name_ + "_user") {
-//         RCLCPP_INFO(this->get_logger(), "Authentication failed.  %s is an unknown principal.", request->principal_name.c_str());
-//         response->discharge_macaroon.macaroon = "";
-//     } else {
-//         RCLCPP_INFO(this->get_logger(), "Valid authentication request (resource: %s // principal: %s)",
-//             request->resource_name.c_str(), request->principal_name.c_str());
-//         // serialise the discharge macaroon and add it to the message
-//         response->discharge_macaroon.macaroon = discharge_macaroon_.serialize();
-//     }
-// }
-
-/**
- * GetResourceToken service
- *
- * Receives an resource request.
- * Responds with either a serialised resource macaroon or rejection (empty string)
- */
-// void
-// ResourceOwner::get_resource_token_service(const std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Request> request,
-//     std::shared_ptr<macaroon_msgs::srv::GetResourceToken::Response> response)
-// {
-//     // if the resource and principal are valid, respond with a serialised discharge macaroon
-//     if(request->resource_name != resource_name_) {
-//         RCLCPP_INFO(this->get_logger(), "Resource token request failed.  %s is an unknown resource.", request->resource_name.c_str());
-//         response->resource_macaroon.macaroon = "";
-//     } else {
-//         RCLCPP_INFO(this->get_logger(), "Valid resource token request received (resource: %s)",
-//             request->resource_name.c_str());
-//         // serialise the discharge macaroon and add it to the message
-//         response->resource_macaroon.macaroon = resource_macaroon_.serialize();
-//     }
-// }
 
 /**
  * UseResourceToken service
