@@ -26,6 +26,20 @@ find_package(std_msgs REQUIRED)
 find_package(macaroon_msgs REQUIRED)
 find_package(libmacaroons REQUIRED)
 
+add_executable(tofu_demo
+  src/tofu_demo.cpp
+  src/resource_owner.cpp
+  src/resource_authenticator.cpp
+  src/resource_user.cpp)
+target_include_directories(tofu_demo PRIVATE
+$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+$<INSTALL_INTERFACE:include>)
+ament_target_dependencies(tofu_demo rclcpp rclcpp_components std_msgs macaroon_msgs libmacaroons)
+
+install(TARGETS
+tofu_demo
+DESTINATION lib/${PROJECT_NAME})
+
 add_executable(third_party_demo
   src/third_party_demo.cpp
   src/resource_owner.cpp
